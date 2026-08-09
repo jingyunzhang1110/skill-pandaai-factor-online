@@ -46,9 +46,10 @@ quantSkills:
     { "key": "start_date", "type": "date", "label": "回测开始日期" },
     { "key": "end_date", "type": "date", "label": "回测结束日期（先按服务端实际上限）" },
     { "key": "cycle", "type": "number", "label": "调仓周期（1-10 个交易日）" },
+    { "key": "group_number", "type": "number", "label": "收益分组数（2-10，默认推荐 10）" },
     { "key": "round_trip", "type": "number", "label": "双向交易成本（小数，如 0.003）" }
   ],
-  "prompt_template": "任务：{{task}}\n阶段：{{stage}}\n回测区间：{{start_date}} 至 {{end_date}}（先按服务端实际上限）\n调仓周期：{{cycle}} 日\n双向成本：{{round_trip}}\n附件：{{#attachments}}\n\n先检查 CLI 版本，再用短区间探测服务端回测上限；按 SKILL.md 流程执行，并按用户选择的目标排序候选。"
+  "prompt_template": "任务：{{task}}\n阶段：{{stage}}\n回测区间：{{start_date}} 至 {{end_date}}（先按服务端实际上限）\n调仓周期：{{cycle}} 日\n分组数：{{group_number}}（默认推荐 10）\n双向成本：{{round_trip}}\n附件：{{#attachments}}\n\n先检查 CLI 版本，再用短区间探测服务端回测上限；按 SKILL.md 流程执行，并按用户选择的目标排序候选。"
 }
 ```
 
@@ -285,7 +286,7 @@ and ten chart series. Full flag reference and known CLI bugs: [references/cli.md
 | Constraint | Value |
 |---|---|
 | Backtest window | CLI 0.1.4 advertises 10 years, but the 2026-08-05 server test rejected >3 years; verify before use |
-| Groups | 2–10 supported by CLI; this skill recommends 10 for its reporting and direction-end parser |
+| Groups | 2–10 supported; use 10 by default for decile reporting, and set it explicitly |
 | Universe | Fixed at 沪深全A |
 | Rebalance cycle | 1–10 days, set at creation |
 | Compute | Fixed cpu=4 / mem=8 / gpu=4 |
@@ -300,6 +301,14 @@ make a second factor, while `factor_update` changes the object's definition. For
 out-of-sample validation, create two separately named objects from the same definition with
 non-overlapping dates. Reserve the final dashboard/submission object for the exact dates, cycle,
 group count, and direction you intend to use; probe and OOS objects are research records.
+
+**Choose groups deliberately.** `group-number` changes quantile bucket width and therefore group
+returns, monotonicity, turnover, and the concentration of the held extreme. It does **not** normally
+change IC, which is computed from factor values and forward returns before grouping. Use 10 by default
+for decile-comparable research and the competition-style report; use 5 as a robustness sensitivity
+check; use 2–4 only when a coarse long/short split is the explicit objective. Never compare group-return
+levels across different group counts as if they were the same portfolio, and keep the chosen value fixed
+across probe, full-window, falsification, OOS, and the final dashboard workflow.
 
 ## Writing formulas
 

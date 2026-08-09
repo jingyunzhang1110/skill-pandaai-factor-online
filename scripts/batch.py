@@ -115,7 +115,7 @@ def fingerprint(cand: dict, args) -> str:
     mode = cand.get("mode", "formula")
     content = cand.get("content", cand.get("formula", ""))
     spec = json.dumps([mode, content, cand["direction"], args.start, args.end,
-                       args.cycle],
+                       args.cycle, args.group_number],
                       ensure_ascii=False)
     return hashlib.sha256(spec.encode("utf-8")).hexdigest()[:16]
 
@@ -135,7 +135,7 @@ def pct(text) -> float:
         return float("nan")
 
 
-def extract(payload: dict, direction: str) -> dict:
+def extract(payload: dict, direction: str, group_number: int | None = None) -> dict:
     """Pull the metrics worth comparing out of a factor_run payload.
 
     Raises ValueError rather than returning NaN: a candidate missing its long side has not
@@ -149,8 +149,23 @@ def extract(payload: dict, direction: str) -> dict:
                   for r in analysis.get("query_factor_analysis_data", [])}
     groups = {r["group"]: r for r in analysis.get("query_group_return_analysis", [])}
 
-    long_name = HIGH if direction == "1" else LOW
-    short_name = LOW if direction == "1" else HIGH
+    labels = [r["group"] for r in analysis.get("query_group_return_analysis", [])
+              if re.fullmatch(r"分组\d+", str(r.get("group", "")))]
+    if len(labels) < 2:
+        raise ValueError("fewer than two group rows returned")
+    if group_number is None:
+        # Direct callers may provide a compact fixture or a partial payload; batch.py passes
+        # the requested count explicitly and therefore validates the complete set.
+        group_number = len(labels)
+    expected = {f"分组{i}" for i in range(1, group_number + 1)}
+    available = expected.intersection(groups)
+    if len(available) != group_number and group_number != len(labels):
+        raise ValueError(f"expected {group_number} group rows, found {len(available)}")
+    numeric_labels = sorted((int(label[2:]), label) for label in labels)
+    low_name = numeric_labels[0][1] if numeric_labels else "分组1"
+    high_name = numeric_labels[-1][1] if numeric_labels else f"分组{group_number}"
+    long_name = high_name if direction == "1" else low_name
+    short_name = low_name if direction == "1" else high_name
     if long_name not in groups:
         raise ValueError(f"no {long_name} row in the group returns")
     turnover = pct(groups[long_name].get("turnoverRate"))
@@ -176,7 +191,7 @@ def cost_of(metrics: dict, cycle: int, one_way: float) -> float:
 
 
 def report(state: dict, candidates: list[dict], cycle: int, round_trip: float,
-           hypotheses: int) -> None:
+           hypotheses: int, group_number: int = 10) -> None:
     header = (f"{'name':<28} {'IC_mean':>8} {'Rank_IC':>8} {'IC_p':>7} {'mono':>6} "
               f"{'long%':>8} {'turn%':>7} {'cost%':>7} {'net%':>8}")
     print("\n" + header)
@@ -191,7 +206,7 @@ def report(state: dict, candidates: list[dict], cycle: int, round_trip: float,
         print(f"{name[:28]:<28} {str(m.get('ic_mean')):>8} {str(m['rank_ic']):>8} "
               f"{str(m.get('ic_p_value')):>7} {str(m['monotonicity']):>6} {m['long_excess']:>8.2f} "
               f"{m['turnover']:>7.2f} {cost:>7.2f} {net:>8.2f}")
-    print(f"\nlong% is the excess return of the direction-selected, equal-weighted extreme 10%; "
+    print(f"\nlong% is the excess return of the direction-selected, equal-weighted extreme 1/{group_number}; "
           f"net% subtracts annual turnover cost at {round_trip:.2%} one-way (2x round trip).")
     print("IC_p is the p-value of the IC_mean t-statistic. Rank_IC has no p-value of its own.")
 
@@ -217,6 +232,8 @@ def main() -> int:
     ap.add_argument("--start", required=True, help="YYYYMMDD")
     ap.add_argument("--end", required=True, help="YYYYMMDD")
     ap.add_argument("--cycle", type=int, default=5, help="rebalance cycle in days, 1-10")
+    ap.add_argument("--group-number", type=int, choices=range(2, 11), default=10,
+                    help="return groups, 2-10; default 10 for decile-compatible reporting")
     ap.add_argument("--round-trip", type=float, default=0.003,
                     help="one-way trading cost as a fraction, default 0.3%% for A-shares")
     ap.add_argument("--prefix", default="", help="prepended to every factor name, eases bulk cleanup")
@@ -237,7 +254,7 @@ def main() -> int:
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
 
     if args.report_only:
-        report(state, candidates, args.cycle, args.round_trip, hypotheses)
+        report(state, candidates, args.cycle, args.round_trip, hypotheses, args.group_number)
         return 0
 
     # Check every fingerprint before spending anything: a stale entry reused as if it were
@@ -291,6 +308,7 @@ def main() -> int:
                           "--name", args.prefix + name,
                           "--start-date", args.start, "--end-date", args.end,
                           "--adjustment-cycle", str(args.cycle),
+                          "--group-number", str(args.group_number),
                           "--factor-direction", cand["direction"])
             if not created.get("success"):
                 entry["error"] = f"create: {created.get('error', {}).get('message', created)}"
@@ -309,7 +327,7 @@ def main() -> int:
         if result.get("success"):
             entry["run_id"] = result.get("factor_run_id")
             try:
-                entry["metrics"] = extract(result, cand["direction"])
+                entry["metrics"] = extract(result, cand["direction"], args.group_number)
                 entry.pop("error", None)
                 net = entry["metrics"]["long_excess"] - cost_of(entry["metrics"], args.cycle,
                                                                 args.round_trip)
@@ -323,7 +341,7 @@ def main() -> int:
         save(state_path, state)
 
     if not args.create_only:
-        report(state, candidates, args.cycle, args.round_trip, hypotheses)
+        report(state, candidates, args.cycle, args.round_trip, hypotheses, args.group_number)
     return 0
 
 
