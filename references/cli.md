@@ -1,10 +1,11 @@
 # pandaai-cli Reference / 命令参考
 
-Targeted at pandaai-cli 0.1.4 (verify the executable in the current environment). `pandaai-cli` is a third-party package that changes
+Reference notes are versioned observations, not a hard-coded compatibility target. Always use the
+installed package version reported by `scripts/bootstrap.py`; `pandaai-cli` is a third-party package that changes
 flags between patch releases — 0.1.2 renamed `factor_list --offset` to `--page` — so check your own
 version before relying on any flag, and note that `uv tool install` pins the version it resolved on
 the day you installed it. `uv tool upgrade pandaai-cli` moves it.
-目标对照 pandaai-cli 0.1.4（请在当前执行环境核对实际可执行版本）。`pandaai-cli` 是第三方包，补丁版本之间会改参数——
+以下是带版本标记的实测观察，不把某个版本写死为目标。始终以 `scripts/bootstrap.py` 报出的已安装版本为准；`pandaai-cli` 是第三方包，补丁版本之间会改参数——
 0.1.2 把 `factor_list --offset` 改成了 `--page`——所以依赖任何参数前先确认本机版本。
 另外 `uv tool install` 会钉死安装当天解析到的版本，要升级用 `uv tool upgrade pandaai-cli`。
 
@@ -73,15 +74,18 @@ pandaai-cli --json factor_create (--formula F | --code C | --file PATH)
 | `--start-date` | yesterday − 60d | Start of the construction window / 构建开始日期 |
 | `--end-date` | yesterday | End of the construction window / 构建结束日期 |
 | `--adjustment-cycle` | 1 | Rebalance cycle, 1–10 days / 调仓周期 1–10 天 |
-| `--group-number` | 5 | Number of return groups, 2–10 / 收益分组数 2–10 |
+| `--group-number` | 5 | Number of return groups, 2–10; set explicitly / 收益分组数 2–10，务必显式设置 |
 | `--factor-direction` | 1 | 1 = higher is better, 0 = lower is better / 1 正向，0 负向 |
 
-The CLI allows 2–10 groups, but this skill's batch parser and reporting convention use 10 groups;
-keep `--group-number 10` for comparable results and correct direction-end extraction. If you choose
-another count, inspect the returned group labels yourself before ranking. The universe is fixed at
+The CLI allows 2–10 groups. IC is calculated before grouping and normally does not change with this
+setting, while group returns, monotonicity, turnover, and extreme-group concentration do. This skill's
+batch default is 10 for decile-compatible reporting; use 5 for a sensitivity check, or 2–4 only for a
+deliberately coarse split. Keep the value fixed across all research stages and inspect returned labels
+when deviating from 10. The universe is fixed at
 沪深全A. The CLI advertises a ten-year maximum, but the server must be probed before relying on it.
-CLI 允许 2–10 组，但本技能的批处理解析和报告口径按 10 组编写；为了结果可比及正确读取方向端，请保持
-`--group-number 10`。如果主动改成其他组数，排序前必须自己检查返回的分组标签。股票池固定沪深全A。
+CLI 允许 2–10 组。IC 在分组前计算，通常不随该参数改变；但分组收益、单调性、换手率和极端组集中度会改变。
+本技能批处理默认 10 组以保持十分位报告可比；5 组用于敏感性检查，2–4 组只适用于明确的粗粒度切分。
+所有研究阶段必须固定分组数，改成非 10 组时先检查返回的分组标签。股票池固定沪深全A。
 CLI 帮助虽宣称最长十年，但 2026-08-05 对 20160101–20251231 的真实运行返回错误码 10003（服务端限制不超过三年）；
 在服务端确认修复前，不要按十年预算或规划批次。
 
@@ -166,11 +170,11 @@ run `scripts/bootstrap.py`) with `gateway_url` and `country_code`, then log in.
 `CONFIG_ERROR: 配置文件不存在` 并退出。而 `login` 恰恰是创建该文件的命令，于是永远排不到它执行。
 先手工写入 `gateway_url` 与 `country_code`（或运行 `scripts/bootstrap.py`），再登录。
 
-**`--json` silently disables `--download`.** Observed on 0.1.3; re-verify on 0.1.4 before relying on it. The CSV write happens only on the
+**`--json` silently disables `--download`.** Observed on 0.1.3; re-verify after every CLI upgrade before relying on it. The CSV write happens only on the
 human-readable code path, so `factor_result <id> --download --json` prints JSON and writes nothing.
 Drop `--json` when you want files — and expect a large one: a long-window run over 沪深全A can exceed
 139 MB, which is why `scripts/analyze.py` samples dates instead of loading everything.
-**`--json` 会静默关闭 `--download`。** 0.1.3 实测如此；升级到 0.1.4 后先复核。写 CSV 只发生在人类可读的分支上，所以
+**`--json` 会静默关闭 `--download`。** 0.1.3 实测如此；每次 CLI 升级后先复核。写 CSV 只发生在人类可读的分支上，所以
 `factor_result <id> --download --json` 只打印 JSON，不落盘。要文件就别加 `--json`——
 并且文件很大：长窗口沪深全A结果可能超过 139 MB，这也是 `scripts/analyze.py` 抽样日期而不是整份读入的原因。
 

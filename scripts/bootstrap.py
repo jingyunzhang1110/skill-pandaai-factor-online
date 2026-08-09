@@ -25,7 +25,6 @@ from pathlib import Path
 
 GATEWAY_URL = "https://www.pandaaiquant.com/pandaApi"
 OBSERVED_RUN_COST = 2
-REFERENCE_CLI_VERSION = "0.1.4"
 LOGIN_PAGE = "https://www.pandaaiquant.com/login"
 COMPETITION = "https://www.pandaaiquant.com/factorhub/fourthFactorCompetition/"
 PERSONAL_CENTER = "https://www.pandaaiquant.com/personalcenter?id=1"
@@ -88,9 +87,8 @@ def check_cli() -> str | None:
 
 
 def report_cli_version(interpreter: str) -> None:
-    """The CLI has no --version, and its flags move between patch releases: 0.1.2 renamed
-    factor_list --offset to --page. Naming the version tells you whether references/cli.md
-    still describes the CLI you have."""
+    """The CLI has no --version. Read package metadata so every run is compared with the
+    executable actually on PATH instead of a hard-coded target version."""
     probe = "import importlib.metadata as m; print(m.version('pandaai-cli'))"
     try:
         proc = subprocess.run([interpreter, "-c", probe], capture_output=True, text=True, timeout=30)
@@ -98,9 +96,7 @@ def report_cli_version(interpreter: str) -> None:
         return
     version = proc.stdout.strip()
     if version:
-        status = OK if version == REFERENCE_CLI_VERSION else WARN
-        say(status, f"pandaai-cli {version} (skill reference target: {REFERENCE_CLI_VERSION};"
-                " compare help and JSON shapes before accepting a different version)")
+        say(OK, f"pandaai-cli {version} (installed version; compare help and JSON shapes with the skill references)")
 
 
 def check_config(path: Path, country_code: str) -> bool:

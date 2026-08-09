@@ -33,7 +33,7 @@ import bootstrap  # noqa: E402
 
 
 def run_payload(long_excess="10.00%", turnover="60.00%", short_excess="-5.00%",
-                groups=("分组1", "分组10")) -> dict:
+                groups=tuple(f"分组{i}" for i in range(1, 11))) -> dict:
     rows = [{"group": g,
              "excessAnnualized": long_excess if g == "分组10" else short_excess,
              "turnoverRate": turnover} for g in groups]
@@ -52,6 +52,7 @@ class Args:
     """Stands in for the argparse namespace batch.py passes around."""
     start, end, cycle, round_trip = "20230101", "20231231", 5, 0.003
     prefix, create_only, report_only = "", False, False
+    group_number = 10
     retry_failed, max_runs, hypotheses = False, 0, 0
     file = Path("candidates.txt")
 
@@ -136,6 +137,11 @@ class Fingerprint(unittest.TestCase):
         args = Args()
         args.round_trip = 0.005
         self.assertEqual(self.base, batch.fingerprint(self.cand, args))
+
+    def test_group_number_changes_the_run_fingerprint(self):
+        args = Args()
+        args.group_number = 5
+        self.assertNotEqual(self.base, batch.fingerprint(self.cand, args))
 
 
 class Extract(unittest.TestCase):
