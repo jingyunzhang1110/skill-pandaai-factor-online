@@ -310,6 +310,12 @@ check; use 2–4 only when a coarse long/short split is the explicit objective. 
 levels across different group counts as if they were the same portfolio, and keep the chosen value fixed
 across probe, full-window, falsification, OOS, and the final dashboard workflow.
 
+**Competition alignment is separate from IC.** The published competition rule builds its long leg
+from the highest 10% of the full universe. Set `--group-number 10` when participating so the
+direction-selected extreme group is the same top/bottom decile used in the rule. This aligns group
+return and turnover diagnostics; it is not an IC optimization and does not reproduce the official
+score by itself.
+
 ## Writing formulas
 
 The most expensive trap, because it fails silently:
@@ -406,6 +412,13 @@ bottom decile, which is the side a direction-0 factor actually holds.
 
 **Decide.** Escalate, orthogonalize, or abandon — one of the three, written down. Without an explicit
 abandon step, dead directions get re-explored a week later.
+
+**Separate public names from research notes.** The CLI currently exposes `--name` but has no reliable
+description field. Use an opaque submission name such as `F-A17`, and keep a local registry next to
+the candidate state with the factor id, exact formula/Python file hash, direction, cycle, group count,
+dates, mechanism, and validation status. Do not put economic ideas, field names, or weights in the
+public name. The registry is the AI-readable explanation and audit trail; the dashboard name is only
+an identifier.
 
 Worksheet and falsification menu: [references/playbook.md](references/playbook.md).
 

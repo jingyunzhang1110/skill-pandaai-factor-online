@@ -125,6 +125,14 @@ input so an interrupted batch resumes without re-creating or re-running anything
 
 ## Combining factors / 因子组合
 
+For competition-oriented research, use `--group-number 10`: the rules' synthetic long portfolio is
+the highest 10% of the universe. This aligns diagnostics, but does not make the CLI reproduce the
+monthly competition score. Screen combinations locally for stability, net long-side return,
+turnover, drawdown, and low redundancy, then treat the platform score as the final authority.
+
+参赛导向的研究使用 `--group-number 10`，因为规则的合成多头是全市场最高 10%。这只能对齐诊断口径，不能让 CLI 复现月度积分。
+本地可按稳定性、多头净收益、换手、回撤和低冗余筛选组合，最终积分以平台为准。
+
 Rank-normalize each component before weighting, otherwise the weights are meaningless:
 加权前先对每个分量做排名归一化，否则权重没有意义：
 
