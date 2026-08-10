@@ -30,8 +30,8 @@ of them documented:
 - The platform headlines a long-short annualized return, which assumes a short leg A-share
   participants cannot build, and reports turnover separately instead of folding it into returns.
 - CLI and server-side backtest windows may differ; verify the server limit before budgeting. On
-  2026-08-09, CLI 0.1.5 accepted a five-year run outside the sandbox but rejected ten years (server
-  cap: five years); keep out-of-sample validation explicit.
+  2026-08-10, CLI 0.1.6 was installed and fixed the research universe to full-A (`沪深全A`);
+  backtest length remains a server capability to probe, and out-of-sample validation remains explicit.
 
 The skill carries those findings, a full reference for 348 fields and 137 operators, and a research
 loop that keeps an agent from spending a whole credit balance on a hundred variants of one idea.

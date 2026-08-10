@@ -97,6 +97,10 @@ def report_cli_version(interpreter: str) -> None:
     version = proc.stdout.strip()
     if version:
         say(OK, f"pandaai-cli {version} (installed version; compare help and JSON shapes with the skill references)")
+        if shutil.which("uv"):
+            say(WARN, "check for a newer release with: uv tool upgrade pandaai-cli (ask before upgrading)")
+        elif shutil.which("pipx"):
+            say(WARN, "check for a newer release with: pipx upgrade pandaai-cli (ask before upgrading)")
 
 
 def check_config(path: Path, country_code: str) -> bool:

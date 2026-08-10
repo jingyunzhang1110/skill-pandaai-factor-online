@@ -70,7 +70,9 @@ mining work. Do not skip ahead to writing formulas, and do not spend a single ru
 and compare it with the user's CLI documentation, official release information, or the currently
 available package version. If a newer version exists, report the version and likely flag, result-shape,
 or billing changes and get consent before upgrading. After an upgrade, rerun preflight and the offline
-self-test; never mix an unverified new CLI with the old compatibility assumptions.
+self-test; never mix an unverified new CLI with the old compatibility assumptions. For a `uv` tool
+install, use `uv tool upgrade pandaai-cli`; for `pipx`, use `pipx upgrade pandaai-cli`. Neither is
+silent: report the outcome, then confirm `balance` still succeeds.
 
 **1. Preflight.** It costs no compute credits — it only queries `balance` and `factor_list` — and
 the sole thing it writes is `~/.pandaai/config.yaml` when that file is missing, which the CLI cannot
@@ -137,10 +139,10 @@ already on the account.
 
 - **Rebalance cycle** (1–10 days). If the competition locks it at submission, it must be decided now
   and every candidate evaluated at that cycle.
-- **Backtest window**, subject to the limit reported by the current server capability probe. The
-  2026-08-09 host-side test accepted five years and rejected ten years; do not assume a later server
-  has the same limit. For research OOS, ask whether the user wants a non-overlapping reserved window
-  rather than imposing one.
+- **Backtest window**, subject to the limit reported by the current server capability probe. Use five
+  years by default for competition A-first research; probe again after any CLI or server change before
+  budgeting. Ten years depends on account/server capability. For research OOS, ask whether the user
+  wants a non-overlapping reserved window rather than imposing one.
 - **Batch budget**, how many runs this session may spend.
 
 **5. Propose a probe batch** of 10–15 candidates spanning *different* hypotheses, and show the list
@@ -299,9 +301,9 @@ resumes from cached run IDs and only contacts the server again with `--refresh`.
 
 | Constraint | Value |
 |---|---|
-| Backtest window | Probe the current server before budgeting. Latest verified: five years accepted on 2026-08-09; ten years rejected |
+| Backtest window | Probe the current server before budgeting; use five years by default for A-first research, and treat ten years as capability-dependent |
 | Groups | 2–10 supported; use 10 by default for decile reporting, and set it explicitly |
-| Universe | CLI 0.1.5 is hard-coded to `中证1000`; the public full-A pool requires a web workflow or a future CLI flag |
+| Universe | CLI 0.1.6 is hard-coded to `沪深全A`, the competition's full-A environment; users cannot override it |
 | Rebalance cycle | 1–10 days, set at creation |
 | Compute | Fixed cpu=4 / mem=8 / gpu=4 |
 
@@ -489,7 +491,7 @@ Execute these; they are not reference reading. Standard library only.
 | `scripts/batch.py` | Batch create / run / tabulate, resumable, ranked net of cost |
 | `scripts/analyze.py` | Local Spearman correlation and turnover from downloaded CSVs |
 | `scripts/competition_proxy.py` | Offline A/B/C competition proxy from saved result snapshots; never calls the CLI |
-| `scripts/selftest.py` | Offline self-test of the three above; run it after editing any of them |
+| `scripts/selftest.py` | Offline self-test; run it after editing any script above |
 
 ## References
 

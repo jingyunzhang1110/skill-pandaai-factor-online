@@ -81,15 +81,14 @@ The CLI allows 2–10 groups. IC is calculated before grouping and normally does
 setting, while group returns, monotonicity, turnover, and extreme-group concentration do. This skill's
 batch default is 10 for decile-compatible reporting; use 5 for a sensitivity check, or 2–4 only for a
 deliberately coarse split. Keep the value fixed across all research stages and inspect returned labels
-when deviating from 10. In CLI 0.1.5, the stock pool is hard-coded to `中证1000`: `factor_create` and
-`factor_update` expose no stock-pool flag, and the installed template writes that value. The public
-competition rule describes 全A, while web-created workflows may return 全A; CLI-created workflows
-cannot be switched to it. Treat CLI results as 中证1000 research unless the service team changes this.
+when deviating from 10. In CLI 0.1.6, the stock pool is hard-coded to `沪深全A`: `factor_create` and
+`factor_update` expose no stock-pool flag, and the installed template writes that value. This is the
+competition's public full-A / 中证全指 research environment.
 普通用户回测已调整为至少 5 年；10 年需要高级会员权限，是否可用仍由本次服务端探测确认。
 CLI 允许 2–10 组。IC 在分组前计算，通常不随该参数改变；但分组收益、单调性、换手率和极端组集中度会改变。
 本技能批处理默认 10 组以保持十分位报告可比；5 组用于敏感性检查，2–4 组只适用于明确的粗粒度切分。
-所有研究阶段必须固定分组数，改成非 10 组时先检查返回的分组标签。当前 CLI 0.1.5 将股票池固定为 `中证1000`，没有
-用户侧参数；比赛规则的全 A 股票池不能通过 CLI 创建的工作流实现，除非服务端/CLI 后续开放该开关。
+所有研究阶段必须固定分组数，改成非 10 组时先检查返回的分组标签。当前 CLI 0.1.6 将股票池固定为 `沪深全A`，没有
+用户侧参数；这就是比赛规则所说的全 A / 中证全指研究环境。
 回测窗口仍应在启动长窗口研究前探测并据此规划预算；5 年是普通用户的比赛 A-first 默认，10 年需高级会员权限。
 不要把某次历史 10 年拒绝当成永久上限，服务端会升级，失败运行也可能扣算力。
 

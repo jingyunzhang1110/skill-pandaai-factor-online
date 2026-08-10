@@ -23,6 +23,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
@@ -31,6 +32,7 @@ sys.path.insert(0, str(SCRIPTS))
 import analyze  # noqa: E402
 import batch  # noqa: E402
 import bootstrap  # noqa: E402
+import build_composites  # noqa: E402
 import collect_results  # noqa: E402
 import competition_proxy  # noqa: E402
 
@@ -116,6 +118,52 @@ class CandidateFile(unittest.TestCase):
         manifest.write_text("bad ~ bad.py ~ 1\n", encoding="utf-8")
         with self.assertRaises(SystemExit):
             batch.parse_candidates(manifest, "python")
+
+
+class CompositeBuilder(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_six_components_generate_six_direction_aligned_five_way_proxies(self):
+        manifest = self.tmp / "components.txt"
+        rows = []
+        for index in range(6):
+            name = f"component-{index}"
+            path = self.tmp / f"{name}.py"
+            path.write_text(
+                "class Source(Factor):\n"
+                "    def calculate(self, factors):\n"
+                f"        return factors['close'] / {index + 1}\n",
+                encoding="utf-8",
+            )
+            rows.append(f"{name} ~ {path.name} ~ {index % 2}")
+        manifest.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        output = self.tmp / "output"
+        old, sys.argv = sys.argv, ["build_composites.py", str(manifest), "--out-dir", str(output)]
+        try:
+            self.assertEqual(build_composites.main(), 0)
+        finally:
+            sys.argv = old
+
+        candidates = (output / "composites.txt").read_text(encoding="utf-8").splitlines()
+        registry = json.loads((output / "registry.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(candidates), 6)
+        self.assertEqual(len(registry["candidates"]), 6)
+        self.assertTrue(all(len(row["components"]) == 5 for row in registry["candidates"]))
+        self.assertTrue(all(len(row["excluded"]) == 1 for row in registry["candidates"]))
+        first = (output / "C-PROBE-01.py").read_text(encoding="utf-8")
+        self.assertEqual(first.count("ZSCORE("), 5)
+        self.assertIn("-(self._", first)
+
+    def test_rejects_a_non_python_component(self):
+        manifest = self.tmp / "components.txt"
+        manifest.write_text("bad ~ not-python.txt ~ 1\n", encoding="utf-8")
+        old, sys.argv = sys.argv, ["build_composites.py", str(manifest), "--out-dir", str(self.tmp / "x")]
+        try:
+            self.assertEqual(build_composites.main(), 2)
+        finally:
+            sys.argv = old
 
 
 class Fingerprint(unittest.TestCase):
@@ -459,6 +507,18 @@ class Environment(unittest.TestCase):
             bootstrap.report_cli_version("/nonexistent/python")
             bootstrap.report_cli_version(sys.executable)  # real, but without pandaai-cli installed
         self.assertNotIn("fail", out.getvalue())
+
+    def test_cli_version_probe_prints_the_uv_upgrade_command(self):
+        completed = subprocess.CompletedProcess([], 0, stdout="0.1.6\n", stderr="")
+        out = io.StringIO()
+        with (
+            patch.object(bootstrap.subprocess, "run", return_value=completed),
+            patch.object(bootstrap.shutil, "which", side_effect=lambda name: "/tool/uv" if name == "uv" else None),
+            contextlib.redirect_stdout(out),
+        ):
+            bootstrap.report_cli_version("/tool/python")
+        self.assertIn("pandaai-cli 0.1.6", out.getvalue())
+        self.assertIn("uv tool upgrade pandaai-cli", out.getvalue())
 
     def test_references_load_under_an_ascii_locale(self):
         env = {**os.environ, "LC_ALL": "C", "LANG": "C",
