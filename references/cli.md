@@ -81,13 +81,29 @@ The CLI allows 2–10 groups. IC is calculated before grouping and normally does
 setting, while group returns, monotonicity, turnover, and extreme-group concentration do. This skill's
 batch default is 10 for decile-compatible reporting; use 5 for a sensitivity check, or 2–4 only for a
 deliberately coarse split. Keep the value fixed across all research stages and inspect returned labels
-when deviating from 10. The universe is fixed at
-沪深全A. The CLI advertises a ten-year maximum, but the server must be probed before relying on it.
+when deviating from 10. In CLI 0.1.5, the stock pool is hard-coded to `中证1000`: `factor_create` and
+`factor_update` expose no stock-pool flag, and the installed template writes that value. The public
+competition rule describes 全A, while web-created workflows may return 全A; CLI-created workflows
+cannot be switched to it. Treat CLI results as 中证1000 research unless the service team changes this.
+普通用户回测已调整为至少 5 年；10 年需要高级会员权限，是否可用仍由本次服务端探测确认。
 CLI 允许 2–10 组。IC 在分组前计算，通常不随该参数改变；但分组收益、单调性、换手率和极端组集中度会改变。
 本技能批处理默认 10 组以保持十分位报告可比；5 组用于敏感性检查，2–4 组只适用于明确的粗粒度切分。
-所有研究阶段必须固定分组数，改成非 10 组时先检查返回的分组标签。股票池固定沪深全A。
-CLI 帮助虽宣称最长十年，但 2026-08-05 对 20160101–20251231 的真实运行返回错误码 10003（服务端限制不超过三年）；
-在服务端确认修复前，不要按十年预算或规划批次。
+所有研究阶段必须固定分组数，改成非 10 组时先检查返回的分组标签。当前 CLI 0.1.5 将股票池固定为 `中证1000`，没有
+用户侧参数；比赛规则的全 A 股票池不能通过 CLI 创建的工作流实现，除非服务端/CLI 后续开放该开关。
+回测窗口仍应在启动长窗口研究前探测并据此规划预算；5 年是普通用户的比赛 A-first 默认，10 年需高级会员权限。
+不要把某次历史 10 年拒绝当成永久上限，服务端会升级，失败运行也可能扣算力。
+
+#### Sandbox authentication / 沙盒认证
+
+If a user's host terminal accepts `login` and `balance` but an agent receives `LOGIN_REQUIRED`, the
+agent may be running in a sandbox, container, or remote executor with a different credential mount or
+network context. Confirm the CLI and config paths, then consider a host-side read-only check as a
+diagnostic direction. The procedure is tool-specific; do not assume sandbox escape is available, and
+never copy tokens into project files or chat.
+
+如果用户终端的 `login` 和 `balance` 都成功，而 Agent 返回 `LOGIN_REQUIRED`，Agent 可能运行在沙盒、容器
+或远程执行器中，使用了不同的凭据挂载或网络上下文。先确认 CLI 和配置路径，再把宿主环境的只读检查作为
+排查方向。具体操作依赖 AI 工具，不能假定一定支持沙盒外执行，也绝不能把 token 复制到项目文件或聊天中。
 
 Returns `{"success": true, "factor_id": "..."}`.
 
@@ -140,6 +156,20 @@ every conclusion.
 分组按因子值升序排列：`分组1` 是最低的一组，`分组10` 是最高的一组。方向参数决定哪一端是多头侧，
 所以 `--factor-direction 1` 时 `多空组合` 等于 `分组10 − 分组1`，为 `0` 时等于 `分组1 − 分组10`。
 看错一端，全部结论都会反过来。
+
+### 批量读取结果（推荐）
+
+不要把多个 `factor_result` 的完整 JSON 直接打印到对话中。用
+`scripts/collect_results.py` 按运行 ID 逐个读取：它把原始响应缓存到本地，只输出进度，
+并生成只含核心指标的 `summary.json`；中断后再次运行会跳过已缓存结果。
+
+```bash
+python3 scripts/collect_results.py run_ids.txt --out-dir result-cache --group-number 10
+```
+
+`run_ids.txt` 每行格式为 `run_id [本地名称] [方向 0/1] [分组数 2-10]`，分组数可省略并使用全局默认值。
+需要重新向服务器查询时才加
+`--refresh`。后续排名、相关性和比赛代理均读取缓存，不重复消耗网络等待或算力。
 
 ### factor_info / factor_update / factor_list / factor_delete / balance
 

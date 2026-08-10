@@ -139,12 +139,11 @@ The reported `turnoverRate` is the share of the held top/bottom 10% portfolio re
 
 ## 11. The server cap shapes your design / 服务端上限决定你的设计
 
-The CLI 0.1.4 help advertises ten years, but a 2026-08-05 live run over ten years was rejected by the server
-with error 10003 (maximum three years). Verify the server limit before budgeting. Out-of-sample validation
-still means creating a second factor object over a reserved non-overlapping range and comparing.
+The CLI may support long windows, but the accepted range is a server-side capability. Probe the current
+server limit before budgeting. Out-of-sample validation still means creating a second factor object over
+a reserved non-overlapping range and comparing.
 
-CLI 0.1.4 帮助虽显示十年，但 2026-08-05 真实十年运行被服务端错误 10003 拒绝（上限三年）。
-规划算力前先探测服务端上限。样本外验证仍意味着在预留的不重叠区间上再建一个因子对象然后对比。
+CLI 支持的长窗口不等于服务端一定接受；规划算力前先探测当前服务端上限。样本外验证仍意味着在预留的不重叠区间上再建一个因子对象然后对比。
 不要因为窗口变长就跳过——长样本仍然可能被风格周期和选择偏差污染。
 
 ## 12. Regime dependence within the available span / 可用跨度内的风格切换

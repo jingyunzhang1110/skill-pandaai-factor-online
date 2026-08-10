@@ -17,6 +17,7 @@ import io
 import json
 import os
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,8 @@ sys.path.insert(0, str(SCRIPTS))
 import analyze  # noqa: E402
 import batch  # noqa: E402
 import bootstrap  # noqa: E402
+import collect_results  # noqa: E402
+import competition_proxy  # noqa: E402
 
 
 def run_payload(long_excess="10.00%", turnover="60.00%", short_excess="-5.00%",
@@ -351,6 +354,84 @@ class Turnover(unittest.TestCase):
     def test_non_finite_values_are_dropped(self):
         path = self.csv(["20230101,a,nan\n", "20230101,b,1.0\n", "20230101,c,\n"])
         self.assertEqual(analyze.read_days(path, {"20230101"}), {"20230101": {"b": 1.0}})
+
+
+class CompetitionProxy(unittest.TestCase):
+    def test_a_uses_recent_five_years_plus_marked_oos(self):
+        records = [
+            {"date": "2021-08-08", "value": 0.9, "sample_type": "in_sample"},
+            {"date": "2020-01-08", "value": -0.2, "sample_type": "out_of_sample"},
+            {"date": "2026-07-08", "value": 0.1, "sample_type": "in_sample"},
+        ]
+        result = competition_proxy.score_a(records, competition_proxy.parse_date("2026-08-09"))
+        self.assertEqual(list(result["monthly_rank_ic"]), ["2020-01", "2026-07"])
+        self.assertEqual(result["metrics"]["periods"], 2)
+        self.assertAlmostEqual(result["metrics"]["win_rate"], 0.5)
+
+    def test_b_is_unavailable_without_post_effective_records(self):
+        result = competition_proxy.score_b(
+            [{"date": "2026-01-10", "value": 0.1}], "2026-01-10")
+        self.assertFalse(result["available"])
+        self.assertIsNone(result["score"])
+        self.assertIn("no post-effective", result["reason"])
+
+    def test_c_applies_the_published_monthly_formula(self):
+        month = {"month": "2026-07", "excess_month": 0.01,
+                 "daily_excess_returns": [0.01, -0.005, 0.004],
+                 "turnover": 0.05, "max_drawdown": 0.1}
+        result = competition_proxy.score_c([month])
+        row = result["monthly"][0]
+        daily = month["daily_excess_returns"]
+        sharpe = statistics.mean(daily) / statistics.stdev(daily) * ((22 * 12) ** 0.5)
+        expected = ((1.01 ** 12 - 1) / 0.3 * sharpe * (1 - 1.2 * 0.1))
+        self.assertTrue(result["available"])
+        self.assertAlmostEqual(row["raw"], expected)
+        self.assertAlmostEqual(row["nc"], min(max(expected / 0.6, 0), 1))
+
+    def test_c_skips_an_incomplete_month(self):
+        result = competition_proxy.score_c(
+            [{"month": "2026-07", "excess_month": 0.01, "turnover": 0.1,
+              "max_drawdown": 0.1}])
+        self.assertFalse(result["available"])
+        self.assertIn("incomplete month", result["warnings"][0])
+
+
+class ResultCollection(unittest.TestCase):
+    def test_rank_ic_chart_is_sampled_at_the_shared_cycle(self):
+        payload = {"factor_analysis": {"query_rank_ic_sequence_chart": {
+            "x": [{"data": ["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]}],
+            "y": [{"name": "Cum_Rank_IC", "data": [1, 2, 3, 4, 5]},
+                  {"name": "Rank_IC", "data": [0.1, 0.2, 0.3, 0.4, 0.5]}],
+        }}}
+        rows = collect_results.rank_ic_records(payload, 2)
+        self.assertEqual(rows, [{"date": "2026-01-02", "value": 0.1},
+                                {"date": "2026-01-06", "value": 0.3},
+                                {"date": "2026-01-08", "value": 0.5}])
+
+    def test_manifest_keeps_direction_when_group_number_is_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "runs.txt"
+            path.write_text("run-a F-A17 0 10\n", encoding="utf-8")
+            self.assertEqual(collect_results.read_manifest(path)[0], {
+                "run_id": "run-a", "name": "F-A17", "direction": "0", "group_number": 10,
+            })
+
+    def test_c_proxy_uses_the_direction_selected_group_and_monthly_turnover(self):
+        payload = {"factor_analysis": {
+            "query_factor_excess_chart": {
+                "x": [{"data": ["2026-01-02", "2026-01-09", "2026-01-16"]}],
+                "y": [{"name": "组1", "data": [0.01, 0.03, 0.02]},
+                      {"name": "组10", "data": [-0.01, -0.02, -0.03]}],
+            },
+            "query_group_return_analysis": [
+                {"group": "分组1", "turnoverRate": "10.00%"},
+                {"group": "分组10", "turnoverRate": "20.00%"},
+            ],
+        }}
+        rows = collect_results.c_proxy_months(payload, "0", 5)
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["turnover"], 0.3)
+        self.assertGreater(rows[0]["excess_month"], 0)
 
 
 class Environment(unittest.TestCase):

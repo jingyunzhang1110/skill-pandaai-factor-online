@@ -23,7 +23,8 @@
 - `MEAN(CLOSE, 20)` 不是 20 日均线。它能解析、能运行，返回一个看起来合理、实际测量另一回事的因子。
 - 分组编号按因子值升序固定，多头端由 `--factor-direction` 决定而非跟随编号。看错一端，全部结论反号。
 - 平台头条是多空年化，隐含了 A 股参与者建不起来的空头腿；换手率单独列出，没有折进收益。
-- CLI 0.1.4 宣称回测最长十年，但 2026-08-05 服务端实测超过三年仍被拒；长样本上线前必须先探测，样本外验证显式另建因子对象。
+- CLI 与服务端的回测窗口可能不同；长样本上线前必须先探测当前服务端能力。2026-08-09 在 CLI 0.1.5
+  沙盒外实测 5 年成功、10 年被拒（服务端上限 5 年）；样本外验证仍要显式另建研究对象。
 
 技能内置这些结论、348 个字段与 137 个算子的完整参考，以及一套研究流程，
 防止 Agent 把算力全花在同一个想法的上百个变体上。
@@ -95,6 +96,8 @@ Agent 从已登录状态继续，全程不接触凭据。
 | Cursor | `python3 scripts/install.py cursor` | `~/.cursor/skills/pandaai-factor-online` |
 | Codex | `python3 scripts/install.py codex` | 在 `~/.codex/AGENTS.md` 追加指引 |
 | Gemini CLI | `python3 scripts/install.py gemini` | 在 `~/.gemini/GEMINI.md` 追加指引 |
+| Hermes | 读取 `HERMES.md` | 交接到 `SKILL.md` |
+| OpenClaw | 读取 `agents/portable-loader.md` 或 `AGENTS.md` | 通用运行时交接 |
 | 单个项目 | `python3 scripts/install.py project [目录]` | 项目内的技能目录 + `AGENTS.md` 指引 |
 
 Kimi Code、opencode、Aider 等读 `AGENTS.md` 的 Agent，通过项目内的指引识别该技能。
@@ -119,9 +122,11 @@ skill-pandaai-factor-online/
 ├── SKILL.md                  技能正文（英文，Agent 入口）
 ├── SKILL.zh-CN.md            中文镜像
 ├── AGENTS.md                 面向 AGENTS.md 类 Agent 的工作约定
+├── HERMES.md                 Hermes 运行时入口
 ├── install.sh                install.py 的 Unix 便捷入口
 ├── agents/
-│   └── openai.yaml           Codex 风格适配
+│   ├── openai.yaml           Codex 风格适配
+│   └── portable-loader.md    Hermes / OpenClaw 通用交接
 ├── references/
 │   ├── cli.md                命令、返回结构与已知 CLI bug
 │   ├── fields.md             348 个公式模式字段 + 回测因子目录索引
@@ -129,12 +134,14 @@ skill-pandaai-factor-online/
 │   ├── operators.md          官方算子手册全文，含用法与示例
 │   ├── pitfalls.md           会产出「能跑但跑错」因子的陷阱
 │   ├── playbook.md           算力预算、复盘表、证伪菜单
+│   ├── competition_rules.md  比赛 A/B/C 规则与本地代理边界
 │   └── source_boundary.md    数据、凭据与研究边界
 └── scripts/
     ├── install.py            跨工具安装器（Windows / macOS / Linux）
     ├── bootstrap.py          体检：环境、配置、登录、算力、因子数量
     ├── batch.py              批量创建 / 运行 / 汇总，可续跑，按成本折算排序
     ├── analyze.py            用下载的 CSV 本地算相关性与换手率
+    ├── competition_proxy.py  保存结果快照的 A/B/C 离线代理
     ├── selftest.py           脚本离线自检（不联网、不扣算力）
     └── validate-qsh-form.mjs qsh-form 自检
 ```
@@ -149,7 +156,7 @@ Python 脚本只依赖标准库。改过 `scripts/` 后跑一次 `python3 script
 | --- | --- |
 | 🔐 凭据归用户 | 登录命令交给用户执行；不打印、不提交配置文件、token 与 uid |
 | 💰 运行会扣算力 | 创建因子免费；以完成运行返回的 `billing.deducted` 为准，先查 `balance`、短区间验证，再批量跑 |
-| 📅 回测上限以服务端实测为准 | CLI 0.1.4 的十年能力尚未在服务端生效；样本外验证必须另建因子对象 |
+| 📅 回测上限以服务端实测为准 | 当前已验证服务端最长 5 年；启动新会话仍需探测，样本外验证必须另建因子对象 |
 | 📊 按多头净超额评判 | 多空年化不作为结论；换手率一律折算成年化成本后再排序 |
 | 🧪 统计纪律 | 保留全部候选（含失败）作为多重检验的分母 |
 | 🚫 只述不荐 | 输出研究结构与事实归纳，不构成任何投资建议 |

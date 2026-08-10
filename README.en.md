@@ -29,8 +29,9 @@ of them documented:
   `--factor-direction` rather than the label. Read the wrong end and every conclusion inverts.
 - The platform headlines a long-short annualized return, which assumes a short leg A-share
   participants cannot build, and reports turnover separately instead of folding it into returns.
-- CLI 0.1.4 advertises ten-year backtests, but the 2026-08-05 server test still rejected anything
-  over three years; verify the server limit before budgeting, and keep out-of-sample validation explicit.
+- CLI and server-side backtest windows may differ; verify the server limit before budgeting. On
+  2026-08-09, CLI 0.1.5 accepted a five-year run outside the sandbox but rejected ten years (server
+  cap: five years); keep out-of-sample validation explicit.
 
 The skill carries those findings, a full reference for 348 fields and 137 operators, and a research
 loop that keeps an agent from spending a whole credit balance on a hundred variants of one idea.
@@ -113,6 +114,8 @@ ever touching the credentials.
 | Cursor | `python3 scripts/install.py cursor` | `~/.cursor/skills/pandaai-factor-online` |
 | Codex | `python3 scripts/install.py codex` | pointer appended to `~/.codex/AGENTS.md` |
 | Gemini CLI | `python3 scripts/install.py gemini` | pointer appended to `~/.gemini/GEMINI.md` |
+| Hermes | read `HERMES.md` | handoff to `SKILL.md` |
+| OpenClaw | read `agents/portable-loader.md` or `AGENTS.md` | portable runtime handoff |
 | One project | `python3 scripts/install.py project [DIR]` | project-local skill dirs plus an `AGENTS.md` pointer |
 
 Kimi Code, opencode, Aider, and other agents that read `AGENTS.md` pick the skill up from the
@@ -140,9 +143,11 @@ skill-pandaai-factor-online/
 ├── SKILL.md                  Skill body (English, agent entrypoint)
 ├── SKILL.zh-CN.md            Chinese mirror
 ├── AGENTS.md                 Working agreement for AGENTS.md-based agents
+├── HERMES.md                 Hermes runtime entrypoint
 ├── install.sh                Unix convenience wrapper around install.py
 ├── agents/
-│   └── openai.yaml           Codex-style adapter
+│   ├── openai.yaml           Codex-style adapter
+│   └── portable-loader.md    Hermes / OpenClaw portable handoff
 ├── references/
 │   ├── cli.md                Commands, result JSON shape, known CLI bugs
 │   ├── fields.md             348 formula-mode fields, plus the catalog index
@@ -150,12 +155,14 @@ skill-pandaai-factor-online/
 │   ├── operators.md          The official operator manual in full
 │   ├── pitfalls.md           Traps that produce valid-but-wrong factors
 │   ├── playbook.md           Credit budget, retrospective worksheet, falsification menu
+│   ├── competition_rules.md  Competition A/B/C rules and proxy boundary
 │   └── source_boundary.md    Data, credential, and research boundaries
 └── scripts/
     ├── install.py            Cross-tool installer (Windows / macOS / Linux)
     ├── bootstrap.py          Preflight: environment, config, login, balance, factor count
     ├── batch.py              Batch create / run / tabulate, resumable, ranked net of cost
     ├── analyze.py            Local correlation and turnover from downloaded CSVs
+    ├── competition_proxy.py  Offline A/B/C proxy from saved result snapshots
     ├── selftest.py           Offline self-test of the scripts (no network, no credits)
     └── validate-qsh-form.mjs qsh-form self-check
 ```
@@ -171,7 +178,7 @@ available it runs one for real, confirming the preflight explains itself instead
 | --- | --- |
 | 🔐 Credentials belong to the user | The user runs the login command; never print or commit the config file, token, or uid |
 | 💰 Runs consume credits | Creating a factor is free; treat completed-run `billing.deducted` as authoritative, check `balance`, validate on a short window, then batch the rest |
-| 📅 Server-verified backtest cap | CLI 0.1.4 advertises ten years, but the server test still rejected >3 years; OOS needs a second factor object |
+| 📅 Server-verified backtest cap | The latest host-side check accepted five years and rejected ten; probe again in each session, and use a second object only for research OOS |
 | 📊 Judge on net long-side excess | The long-short headline is not the conclusion; convert turnover to an annual cost first |
 | 🧪 Statistical discipline | Keep every candidate tested, failures included, as the multiple-testing denominator |
 | 🚫 Description, not recommendation | Research structure and factual summaries only, never investment advice |

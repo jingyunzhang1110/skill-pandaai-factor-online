@@ -12,4 +12,6 @@ config.yaml
 factor_data_*.csv
 prices/
 real_runs/
+research/result-cache/
+research/
 sources/

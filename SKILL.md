@@ -1,14 +1,14 @@
 ---
 name: pandaai-factor-online
 description: "Set up pandaai-cli, log in to PandaAI, and mine, backtest, and iterate quantitative factors on the platform. Use when an agent needs to onboard a user to the PandaAI factor competition, install or log in to pandaai-cli, look up available fields and operators, write or debug factor formulas, run and batch factor analyses, or interpret IC / group-return / turnover results on portable agent platforms such as Claude Code, Cursor, OpenClaw, or Codex-style skill systems."
-license: GPL-3.0
+license: GPL-3.0-only
 quantSkills:
   organization: https://github.com/quantskills
   repository: quantskills/skill-pandaai-factor-online
   repository_url: https://github.com/quantskills/skill-pandaai-factor-online
   project_type: skill
   collection: factor-analysis
-  license: GPL-3.0
+  license: GPL-3.0-only
   category: factor
   tags: [pandaai, factor-mining, pandaai-cli, a-shares, backtest, onboarding]
   platforms: [claude-code, codex, cursor, openclaw]
@@ -40,7 +40,8 @@ quantSkills:
         { "value": "full", "label": "全区间：只跑幸存者" },
         { "value": "falsify", "label": "证伪：变体与分年拆解" },
         { "value": "oos", "label": "样本外：预留区间重建" },
-        { "value": "review", "label": "复盘：相关性与换手成本" }
+        { "value": "review", "label": "复盘：相关性与换手成本" },
+        { "value": "competition", "label": "进阶：比赛规则代理评估" }
       ]
     },
     { "key": "start_date", "type": "date", "label": "回测开始日期" },
@@ -121,6 +122,13 @@ they have not:
 
 Re-run preflight after the user reports back. Only continue when every line reads `ok`.
 
+**Authentication troubleshooting in sandboxed agents.** If the user's own terminal accepts `login`
+and `balance` but the agent reports `LOGIN_REQUIRED`, first verify the resolved CLI and config paths.
+A sandbox, container, or remote executor may not share the host terminal's live credential view or
+network context. A read-only check outside the sandbox / in the host environment is one diagnostic
+direction only; the exact procedure depends on the AI tool. Never copy the token into the repository,
+candidate files, prompts, or chat.
+
 **3. Report the account, in the user's terms.** Convert the balance into experiments —
 the currently observed per-run charge, so state how many runs are affordable — and mention how many factors are
 already on the account.
@@ -129,9 +137,10 @@ already on the account.
 
 - **Rebalance cycle** (1–10 days). If the competition locks it at submission, it must be decided now
   and every candidate evaluated at that cycle.
-- **Backtest window**, subject to the server's currently verified limit (the 2026-08-05 server still
-  rejected anything over three years despite CLI 0.1.4 help), plus which non-overlapping window is reserved
-  for out-of-sample validation and will not be looked at during mining.
+- **Backtest window**, subject to the limit reported by the current server capability probe. The
+  2026-08-09 host-side test accepted five years and rejected ten years; do not assume a later server
+  has the same limit. For research OOS, ask whether the user wants a non-overlapping reserved window
+  rather than imposing one.
 - **Batch budget**, how many runs this session may spend.
 
 **5. Propose a probe batch** of 10–15 candidates spanning *different* hypotheses, and show the list
@@ -281,13 +290,18 @@ A completed run returns IC statistics (IC_mean, Rank_IC, IC_IR, t-statistic, p-v
 per-decile annualized and excess returns with turnover and win rates, the current top-ranked names,
 and ten chart series. Full flag reference and known CLI bugs: [references/cli.md](references/cli.md).
 
+**Cache before analysis.** A `factor_result` response also contains large chart series. For multiple
+completed runs, use `scripts/collect_results.py` to fetch them sequentially into a local cache and
+write a compact `summary.json`; do not stream full JSON responses into the conversation. The command
+resumes from cached run IDs and only contacts the server again with `--refresh`.
+
 ## Platform constraints
 
 | Constraint | Value |
 |---|---|
-| Backtest window | CLI 0.1.4 advertises 10 years, but the 2026-08-05 server test rejected >3 years; verify before use |
+| Backtest window | Probe the current server before budgeting. Latest verified: five years accepted on 2026-08-09; ten years rejected |
 | Groups | 2–10 supported; use 10 by default for decile reporting, and set it explicitly |
-| Universe | Fixed at 沪深全A |
+| Universe | CLI 0.1.5 is hard-coded to `中证1000`; the public full-A pool requires a web workflow or a future CLI flag |
 | Rebalance cycle | 1–10 days, set at creation |
 | Compute | Fixed cpu=4 / mem=8 / gpu=4 |
 
@@ -315,6 +329,36 @@ from the highest 10% of the full universe. Set `--group-number 10` when particip
 direction-selected extreme group is the same top/bottom decile used in the rule. This aligns group
 return and turnover diagnostics; it is not an IC optimization and does not reproduce the official
 score by itself.
+
+**Competition goal means A-first mining.** When the user explicitly wants a competition pool, settle
+the pool's rebalance cycle, stock-pool setting, and decile reporting before creating the first formal
+candidate. The formal screening window is the five years ending on the intended submission date; a
+short probe only validates syntax and fields, never replaces A. For each five-year result,
+`scripts/collect_results.py --cycle <pool cycle>` samples the CLI RankIC chart at the shared rebalance
+dates and aggregates it monthly for an A proxy. Keep all candidates and failures in the research
+registry, then screen the direction-selected long side with cost and risk as a C history proxy. B is
+unavailable until genuine post-effective records exist. Label every local result a proxy; do not submit
+a pool or claim an official score automatically. Details: [`references/competition_rules.md`](references/competition_rules.md).
+
+**Present two choices, not a promise.** `A-first` is the default: maximize the five-year A proxy
+without accepting a clearly negative, cost-adjusted long side. A user may explicitly choose
+`B-regime`: accept weaker A in exchange for factors that worked in a documented historical regime
+similar to today. Both are pre-submission research filters; they feed one formal pool, and only new
+post-effective observations become B.
+
+**Competition metric reminders.** IC win rate is directional `IC > 0.02` or `IC < -0.02`, not merely
+`IC > 0`; RankIC and ICIR use the pool rebalance dates and RankIC is then aggregated monthly. C uses
+the sum of all rebalance turnovers in the month, daily in-month net-value data for SR and MaxDD, and
+returns after the one-way 0.3% cost. After pool submission, add/delete changes are restricted to
+days 1--3 of each month; additions enter on the next shared rebalance, formula/code edits reset
+post-effective history, and a name-only edit outside that window does not. The 50-new-factors-per-day
+limit applies to human and Agent tracks, with the Beijing 07:00 date boundary.
+
+**Combination selection is a separate layer.** With six or more candidates, first screen them on the
+same five-year A window, cost-adjusted long side, and cross-sectional redundancy, then enumerate
+five-factor combinations as pending pool candidates. The current CLI has no pool backtest or daily
+pool ledger, so never add or average single-factor C values to claim the best official combination;
+obtain the platform pool ledger before ranking combinations by C.
 
 ## Writing formulas
 
@@ -428,8 +472,9 @@ Worksheet and falsification menu: [references/playbook.md](references/playbook.m
   candidates a nominal p < 0.05 means nothing; use p < 0.05/N as a rough filter. `batch.py` prints
   the threshold, but N defaults to the current file — pass `--hypotheses` with the running total
   once a study spans several files, or the threshold resets with every batch.
-- **Hold out data.** Under the 10-year cap, reserve a non-overlapping period before mining; out-of-sample
-  means re-creating survivors as new factor objects over that reserved range and confirming the sign and magnitude hold.
+- **Optional walk-forward.** Do not force a reserved holdout when the user's objective is to use the
+  latest five years to choose a submission. Offer a walk-forward or regime-matched historical check
+  as an optional B proxy; it is not the official post-effective B.
 - **Keep the failures.** They are the denominator of the correction.
 - **Prefer few uncorrelated axes.** Five factors at 0.9 mutual correlation is one factor with extra
   steps.
@@ -443,6 +488,7 @@ Execute these; they are not reference reading. Standard library only.
 | `scripts/bootstrap.py` | Preflight: environment, config, login state, balance, factor count |
 | `scripts/batch.py` | Batch create / run / tabulate, resumable, ranked net of cost |
 | `scripts/analyze.py` | Local Spearman correlation and turnover from downloaded CSVs |
+| `scripts/competition_proxy.py` | Offline A/B/C competition proxy from saved result snapshots; never calls the CLI |
 | `scripts/selftest.py` | Offline self-test of the three above; run it after editing any of them |
 
 ## References
@@ -455,6 +501,8 @@ Execute these; they are not reference reading. Standard library only.
 | [references/python_factors.md](references/python_factors.md) | Python factor return contract, examples, and CLI file mode |
 | [references/pitfalls.md](references/pitfalls.md) | Traps that produce valid-but-wrong factors |
 | [references/playbook.md](references/playbook.md) | Credit budget, retrospective worksheet, falsification menu |
+| [references/competition_rules.md](references/competition_rules.md) | Official A/B/C scoring summary and the boundary of local proxies |
+| [references/competition_proxy.md](references/competition_proxy.md) | Snapshot format and offline competition-proxy usage |
 | [references/source_boundary.md](references/source_boundary.md) | Data, credential, and research boundaries |
 
 ## Safety

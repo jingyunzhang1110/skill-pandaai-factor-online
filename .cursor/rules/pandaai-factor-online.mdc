@@ -12,6 +12,8 @@ Hard rules:
   containing a password, hand it to the user. Never print or commit the config file, token, or uid.
 - `factor_run` costs compute credits: check `balance`, validate on a short window, batch the rest.
 - `MEAN(A,B)` is not a rolling mean; use `MA(X,N)` or `TS_MEAN(X,N)`. See `references/pitfalls.md`.
-- Backtest windows cannot exceed three years; groups are fixed at 10 and the universe at 沪深全A.
+- Probe the current server backtest limit before budgeting; the latest verified server accepted five
+  years. Groups support 2-10; use 10 by default for competition-style decile reporting, and keep the
+  universe at 沪深全A.
 - 分组1 is the lowest factor value and 分组10 the highest, so the long side follows the direction flag.
 - Rank candidates by long-decile excess return net of turnover cost, not the headline long-short number.
