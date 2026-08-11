@@ -156,6 +156,8 @@ every conclusion.
 所以 `--factor-direction 1` 时 `多空组合` 等于 `分组10 − 分组1`，为 `0` 时等于 `分组1 − 分组10`。
 看错一端，全部结论都会反过来。
 
+`batch.py` 将方向端的 `sharpeRatio`、`maxDrawdown` 和 `monthlyWinRate` 写入研究报告；它们是单因子分组诊断，不是比赛池级 C 的组合日频指标。
+
 ### 批量读取结果（推荐）
 
 不要把多个 `factor_result` 的完整 JSON 直接打印到对话中。用

@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import csv
 import hashlib
+import io
 import json
 import math
 import os
@@ -127,6 +129,13 @@ def save(path: Path, state: dict) -> None:
     os.replace(tmp, path)
 
 
+def save_text(path: Path, text: str) -> None:
+    """Atomically write a user-facing UTF-8 report."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8", newline="")
+    os.replace(tmp, path)
+
+
 def pct(text) -> float:
     """'12.34%' -> 12.34, tolerating missing values."""
     try:
@@ -182,6 +191,11 @@ def extract(payload: dict, direction: str, group_number: int | None = None) -> d
         "long_excess": excess,
         "short_excess": pct(groups.get(short_name, {}).get("excessAnnualized")),
         "turnover": turnover,
+        # Held-side diagnostics are useful for one-factor review, but do not reproduce
+        # the competition's standardized, equal-weighted pool-level C score.
+        "long_sharpe": pct(groups[long_name].get("sharpeRatio")),
+        "long_max_drawdown": pct(groups[long_name].get("maxDrawdown")),
+        "long_monthly_win_rate": pct(groups[long_name].get("monthlyWinRate")),
     }
 
 
@@ -224,6 +238,103 @@ def report(state: dict, candidates: list[dict], cycle: int, round_trip: float,
               " or this threshold resets every batch.")
 
 
+REPORT_COLUMNS = (
+    "name", "direction", "status", "factor_id", "run_id", "rank_ic", "ic_mean", "ic_ir",
+    "ic_p_value", "monotonicity", "long_excess_pct", "turnover_pct", "annual_cost_pct",
+    "net_excess_pct", "long_sharpe", "long_max_drawdown_pct", "long_monthly_win_rate_pct",
+    "raw_result", "error",
+)
+
+
+def report_rows(state: dict, candidates: list[dict], cycle: int, one_way: float) -> list[dict]:
+    """Turn durable batch state into flat report rows without calling the CLI."""
+    rows = []
+    for cand in candidates:
+        entry = state.get(cand["name"], {})
+        metrics = entry.get("metrics")
+        row = {
+            "name": cand["name"], "direction": cand["direction"],
+            "status": "completed" if metrics else ("failed" if entry.get("error") else "pending"),
+            "factor_id": entry.get("factor_id", ""), "run_id": entry.get("run_id", ""),
+            "raw_result": entry.get("raw_result", ""), "error": entry.get("error", ""),
+        }
+        if metrics:
+            cost = cost_of(metrics, cycle, one_way)
+            row.update({
+                "rank_ic": metrics.get("rank_ic"), "ic_mean": metrics.get("ic_mean"),
+                "ic_ir": metrics.get("ic_ir"), "ic_p_value": metrics.get("ic_p_value"),
+                "monotonicity": metrics.get("monotonicity"),
+                "long_excess_pct": metrics.get("long_excess"), "turnover_pct": metrics.get("turnover"),
+                "annual_cost_pct": cost, "net_excess_pct": metrics["long_excess"] - cost,
+                "long_sharpe": metrics.get("long_sharpe"),
+                "long_max_drawdown_pct": metrics.get("long_max_drawdown"),
+                "long_monthly_win_rate_pct": metrics.get("long_monthly_win_rate"),
+            })
+        rows.append({column: row.get(column, "") for column in REPORT_COLUMNS})
+    return rows
+
+
+def markdown_value(column: str, value: object) -> str:
+    if value in (None, ""):
+        return "-"
+    if column.endswith("_pct"):
+        return f"{float(value):.2f}%"
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def write_reports(input_file: Path, state: dict, candidates: list[dict], cycle: int,
+                  one_way: float, hypotheses: int, group_number: int) -> tuple[Path, Path]:
+    """Write reusable Markdown and CSV research views beside a candidate manifest."""
+    rows = report_rows(state, candidates, cycle, one_way)
+    csv_path = input_file.with_name(f"{input_file.stem}.report.csv")
+    csv_buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(csv_buffer, fieldnames=REPORT_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    save_text(csv_path, csv_buffer.getvalue())
+
+    md_path = input_file.with_name(f"{input_file.stem}.report.md")
+    completed = sum(row["status"] == "completed" for row in rows)
+    failed = sum(row["status"] == "failed" for row in rows)
+    selected = [row for row in rows if row["status"] == "completed"]
+    selected.sort(key=lambda row: float(row["net_excess_pct"]), reverse=True)
+    columns = ("name", "direction", "rank_ic", "ic_ir", "long_excess_pct", "turnover_pct",
+               "annual_cost_pct", "net_excess_pct", "long_sharpe", "long_max_drawdown_pct",
+               "long_monthly_win_rate_pct")
+    lines = [
+        "# PandaAI Factor Research Report", "",
+        f"- Candidates: {len(rows)}; completed: {completed}; failed: {failed}",
+        f"- Settings: {cycle}-day rebalance, {group_number} groups, {one_way:.2%} one-way cost",
+        f"- Multiple-testing reference: p < {0.05 / max(hypotheses, 1):.4f}",
+        "- `long_sharpe`, drawdown, and monthly win rate are direction-selected single-factor diagnostics, not official pool-level C metrics.",
+        "- Full CLI payloads are retained at the `raw_result` paths in the CSV.", "",
+        "| " + " | ".join(columns) + " |",
+        "| " + " | ".join("---" for _ in columns) + " |",
+    ]
+    lines.extend("| " + " | ".join(markdown_value(column, row[column]) for column in columns) + " |"
+                 for row in selected)
+    if not selected:
+        lines.append("| - | - | - | - | - | - | - | - | - | - | - |")
+    if failed:
+        lines.extend(["", "## Failures", ""])
+        lines.extend(f"- `{row['name']}`: {row['error']}" for row in rows if row["status"] == "failed")
+    save_text(md_path, "\n".join(lines) + "\n")
+    return md_path, csv_path
+
+
+def cache_result(input_file: Path, candidate_name: str, run_id: object, payload: dict) -> str:
+    """Preserve the full paid-run response so later metrics need no second run."""
+    raw_dir = input_file.with_name(f"{input_file.stem}.results")
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    key = str(run_id or candidate_name)
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "_", key).strip("._") or "result"
+    path = raw_dir / f"{filename}.json"
+    save(path, payload)
+    return str(path.relative_to(input_file.parent))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("file", type=Path)
@@ -255,6 +366,9 @@ def main() -> int:
 
     if args.report_only:
         report(state, candidates, args.cycle, args.round_trip, hypotheses, args.group_number)
+        md_path, csv_path = write_reports(args.file, state, candidates, args.cycle, args.round_trip,
+                                          hypotheses, args.group_number)
+        print(f"saved report: {md_path}\nsaved table: {csv_path}")
         return 0
 
     # Check every fingerprint before spending anything: a stale entry reused as if it were
@@ -326,6 +440,7 @@ def main() -> int:
         runs += 1
         if result.get("success"):
             entry["run_id"] = result.get("factor_run_id")
+            entry["raw_result"] = cache_result(args.file, name, entry["run_id"], result)
             try:
                 entry["metrics"] = extract(result, cand["direction"], args.group_number)
                 entry.pop("error", None)
@@ -342,6 +457,9 @@ def main() -> int:
 
     if not args.create_only:
         report(state, candidates, args.cycle, args.round_trip, hypotheses, args.group_number)
+        md_path, csv_path = write_reports(args.file, state, candidates, args.cycle, args.round_trip,
+                                          hypotheses, args.group_number)
+        print(f"saved report: {md_path}\nsaved table: {csv_path}")
     return 0
 
 
