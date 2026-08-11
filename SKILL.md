@@ -74,6 +74,13 @@ self-test; never mix an unverified new CLI with the old compatibility assumption
 install, use `uv tool upgrade pandaai-cli`; for `pipx`, use `pipx upgrade pandaai-cli`. Neither is
 silent: report the outcome, then confirm `balance` still succeeds.
 
+**0.1. Check Skill freshness once per session.** `scripts/bootstrap.py` compares this Git checkout
+with `origin/main` and only reports whether the published Skill is ahead; it never pulls code. If an
+update is available, ask for approval, then use `git pull --ff-only origin main` and run
+`python3 scripts/selftest.py` before starting a new batch. Do not update a running or resumable batch
+in place. If the Skill was installed without Git or GitHub is unreachable, report that the check is
+unknown and continue with the local version.
+
 **1. Preflight.** It costs no compute credits — it only queries `balance` and `factor_list` — and
 the sole thing it writes is `~/.pandaai/config.yaml` when that file is missing, which the CLI cannot
 create for itself. Run it rather than paraphrasing what it would do:
@@ -82,7 +89,7 @@ create for itself. Run it rather than paraphrasing what it would do:
 python3 scripts/bootstrap.py
 ```
 
-It checks the Python environment, the CLI install, the config file, login state, compute balance,
+It checks the Skill checkout freshness, Python environment, CLI install, the config file, login state, compute balance,
 the number of factors on the account, and the bundled field and operator references, printing the
 exact next command whenever a step is unsatisfied. Every script here runs on Windows, macOS, and
 Linux; on Windows the interpreter is `python`, not `python3`.
@@ -403,8 +410,10 @@ pandaai-cli --json factor_create --formula "BIAS(CLOSE,20)" --name "20d bias" \
 pandaai-cli --json factor_run <factor_id>
 ```
 
-For anything beyond one candidate, use the batch script. It creates, runs, tabulates, and
-checkpoints after each step so an interruption never re-spends credits:
+Use the batch script even for one candidate whenever the result must remain a reusable research
+artifact. It creates, runs, tabulates, and
+checkpoints after each step so an interruption never re-spends credits. Each successful run also
+retains the full CLI response and produces a readable report plus a filterable table:
 
 ```bash
 python3 scripts/batch.py candidates.txt --start 20230101 --end 20251231 --cycle 5 --prefix "probe-"
@@ -425,6 +434,17 @@ reaches the platform. Three flags guard the credits:
 | `--max-runs N` | Stops after N runs whatever remains in the file; re-run to continue |
 | `--retry-failed` | Failures are terminal by default, since a retry costs the same as the first run |
 | `--hypotheses N` | The study-wide candidate count for the multiple-testing threshold |
+
+Every finished batch writes three durable assets beside the candidate file:
+
+- `candidates.results/<run_id>.json` — complete raw `factor_run` response for later local review;
+- `candidates.report.md` — research report ranked by cost-adjusted long-side excess return;
+- `candidates.report.csv` — filterable table with IC, direction-selected return, turnover, annual cost,
+  net excess, direction-selected Sharpe, maximum drawdown, and monthly win rate.
+
+`--report-only` rebuilds the Markdown and CSV from saved state without invoking the CLI or spending
+credits. Sharpe, drawdown, and monthly win rate in these reports are **single-factor held-side
+diagnostics**, not official C inputs from a standardized, equal-weighted competition pool.
 
 Re-running the same file with a different window is how out-of-sample validation is set up, so the
 batch refuses to start when saved results no longer match the candidates. Copy the candidates into a
@@ -501,7 +521,7 @@ Execute these; they are not reference reading. Standard library only.
 
 | Script | Purpose |
 |---|---|
-| `scripts/bootstrap.py` | Preflight: environment, config, login state, balance, factor count |
+| `scripts/bootstrap.py` | Preflight: Skill freshness, environment, config, login state, balance, factor count |
 | `scripts/batch.py` | Batch create / run / tabulate, resumable, ranked net of cost |
 | `scripts/analyze.py` | Local Spearman correlation and turnover from downloaded CSVs |
 | `scripts/competition_proxy.py` | Offline A/B/C competition proxy from saved result snapshots; never calls the CLI |

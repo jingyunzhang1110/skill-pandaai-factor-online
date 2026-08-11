@@ -22,6 +22,11 @@ English version: [SKILL.md](SKILL.md)
 `uv tool upgrade pandaai-cli`，通过 `pipx` 安装时用 `pipx upgrade pandaai-cli`；都不能静默执行，
 要汇报结果并确认 `balance` 仍然成功。
 
+**0.1. 每个会话只检查一次 Skill 新鲜度。** `scripts/bootstrap.py` 会把本地 Git 仓库与 `origin/main` 比较，
+只报告 GitHub 是否有新提交，不会自动拉取。如果发现更新，先征得用户同意，再执行
+`git pull --ff-only origin main`，并在开始新批次前运行 `python3 scripts/selftest.py`。不要在正在运行或可续跑的批次中途更新。
+如果 Skill 不是 Git 仓库，或 GitHub 暂时无法访问，报告“无法确认版本”并继续使用本地版本。
+
 **1. 体检。** 它不花算力——只调用 `balance` 和 `factor_list`；唯一会写的东西是 `~/.pandaai/config.yaml`，
 且仅在该文件缺失时创建，因为 CLI 自己创建不了它。直接运行，不要用自己的话复述它的功能：
 
@@ -29,7 +34,7 @@ English version: [SKILL.md](SKILL.md)
 python3 scripts/bootstrap.py
 ```
 
-它会依次检查 Python 环境、CLI 安装、配置文件、登录状态、算力余额、账号已有的因子数量，
+它会依次检查 Skill 是否落后、Python 环境、CLI 安装、配置文件、登录状态、算力余额、账号已有的因子数量，
 以及随技能附带的字段与算子参考，并在任何一步不满足时打印出确切的下一条命令。
 这里的脚本在 Windows、macOS、Linux 上都能跑；Windows 上解释器是 `python`，不是 `python3`。
 
@@ -290,7 +295,7 @@ pandaai-cli --json factor_create --formula "BIAS(CLOSE,20)" --name "20日乖离"
 pandaai-cli --json factor_run <factor_id>
 ```
 
-超过一个候选就用批量脚本。它负责创建、运行、汇总，并在每一步之后落盘，中断后不会重复花算力：
+需要保留研究资产时，即使只有一个候选也用批量脚本。它负责创建、运行、汇总，并在每一步之后落盘，中断后不会重复花算力。每个成功运行还会保留完整的 CLI 原始响应，并生成可读报告和表格：
 
 ```bash
 python3 scripts/batch.py candidates.txt --start 20230101 --end 20251231 --cycle 5 --prefix "probe-"
@@ -310,6 +315,14 @@ python3 scripts/batch.py candidates.txt --start 20230101 --end 20251231 --cycle 
 | `--max-runs N` | 跑满 N 次就停，文件里剩下的留到下次；再执行一遍从断点继续 |
 | `--retry-failed` | 失败默认是终态，因为重试一次和第一次一样扣算力 |
 | `--hypotheses N` | 整个研究累计测过的候选数，用于多重检验阈值 |
+
+每次批次结束，在候选文件同一目录得到三类资产：
+
+- `candidates.results/<run_id>.json`：完整原始 `factor_run` 返回，供以后新增指标时本地复核；
+- `candidates.report.md`：按扣成本多头超额排序的研究报告；
+- `candidates.report.csv`：可筛选的表格，含 IC、方向端超额收益、换手、年化成本、净超额、方向端夏普、最大回撤和月度胜率。
+
+`--report-only` 只用已保存 state 重建 Markdown 和 CSV，不会调用 CLI 或花算力。报告里的夏普、回撤和月度胜率是**单因子方向端诊断**；它们不能替代比赛池标准化、等权合成后的官方 C。
 
 样本外验证正是「同一批候选换一个更早的区间」，所以当保存的结果与当前候选对不上时，批次会拒绝启动。
 请把候选复制到第二个文件里跑更早的区间，不要在原文件上改。
@@ -385,7 +398,7 @@ python3 scripts/batch.py python-candidates.txt --mode python \
 
 | 脚本 | 用途 |
 |---|---|
-| `scripts/bootstrap.py` | 体检：环境、配置、登录状态、算力、因子数量 |
+| `scripts/bootstrap.py` | 体检：Skill 新鲜度、环境、配置、登录状态、算力、因子数量 |
 | `scripts/batch.py` | 批量创建 / 运行 / 汇总，可续跑，按扣除成本后的净值排序 |
 | `scripts/analyze.py` | 用下载的 CSV 本地算 Spearman 相关与换手率 |
 | `scripts/competition_proxy.py` | 从保存的结果快照离线计算 A/B/C 比赛规则代理；绝不调用 CLI |

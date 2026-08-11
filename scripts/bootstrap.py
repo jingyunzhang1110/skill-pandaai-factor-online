@@ -3,11 +3,12 @@
 
 Run this first, and again whenever something stops working. It checks in order:
 
-  1. Python version and which interpreter this project will use
-  2. whether pandaai-cli is installed, and where it came from
-  3. ~/.pandaai/config.yaml (pandaai-cli 0.1.x cannot create it on its own)
-  4. login state, compute balance, and how many factors the account already has
-  5. the bundled field and operator references
+  1. whether this Git checkout is behind the published Skill on GitHub
+  2. Python version and which interpreter this project will use
+  3. whether pandaai-cli is installed, and where it came from
+  4. ~/.pandaai/config.yaml (pandaai-cli 0.1.x cannot create it on its own)
+  5. login state, compute balance, and how many factors the account already has
+  6. the bundled field and operator references
 
 Prints the exact next command whenever a step is not satisfied. Never prints credentials.
 """
@@ -30,6 +31,7 @@ COMPETITION = "https://www.pandaaiquant.com/factorhub/fourthFactorCompetition/"
 PERSONAL_CENTER = "https://www.pandaaiquant.com/personalcenter?id=1"
 DEFAULT_CONFIG = Path.home() / ".pandaai" / "config.yaml"
 REFS = Path(__file__).resolve().parent.parent / "references"
+SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 OK, WARN, BAD = "ok  ", "note", "fail"
 WINDOWS = sys.platform == "win32"
@@ -37,6 +39,54 @@ WINDOWS = sys.platform == "win32"
 
 def say(status: str, message: str) -> None:
     print(f"[{status}] {message}")
+
+
+def check_skill_update(root: Path = SKILL_ROOT) -> bool:
+    """Check origin/main without changing the worktree or pulling code.
+
+    This is intentionally a session-level preflight check. A failure to reach GitHub is a
+    warning, not a reason to block local research; the user can decide when to update.
+    """
+    git = shutil.which("git")
+    if not git or not (root / ".git").exists():
+        say(WARN, "Skill update check unavailable (not a Git checkout or git is missing)")
+        return True
+
+    def run(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+        return subprocess.run([git, "-C", str(root), *args], capture_output=True,
+                              text=True, timeout=timeout)
+
+    remote = run("remote", "get-url", "origin")
+    if remote.returncode:
+        say(WARN, "Skill update check skipped: no origin remote")
+        return True
+    fetched = run("fetch", "--quiet", "--no-tags", "origin", "main", timeout=45)
+    if fetched.returncode:
+        say(WARN, "Skill update check could not reach GitHub; local version was not changed")
+        return True
+    local = run("rev-parse", "HEAD")
+    upstream = run("rev-parse", "origin/main")
+    if local.returncode or upstream.returncode:
+        say(WARN, "Skill update check could not resolve local or origin/main revision")
+        return True
+    counts = run("rev-list", "--left-right", "--count", "HEAD...origin/main")
+    if counts.returncode:
+        say(WARN, "Skill update check could not compare revisions")
+        return True
+    try:
+        ahead, behind = (int(value) for value in counts.stdout.split())
+    except (TypeError, ValueError):
+        say(WARN, "Skill update check returned an unexpected revision comparison")
+        return True
+    if behind:
+        say(WARN, f"Skill update available: local is {behind} commit(s) behind origin/main")
+        print("       Ask before updating; after approval use `git pull --ff-only origin main`,")
+        print("       then run `python3 scripts/selftest.py` before starting a new batch.")
+    elif ahead:
+        say(WARN, f"local Skill has {ahead} unpublished commit(s); origin/main is not newer")
+    else:
+        say(OK, "Skill is up to date with origin/main")
+    return True
 
 
 def check_python() -> bool:
@@ -201,6 +251,7 @@ def main() -> int:
     ap.add_argument("--country-code", default="86")
     args = ap.parse_args()
 
+    check_skill_update()
     if not check_python():
         return 1
     if not check_cli():

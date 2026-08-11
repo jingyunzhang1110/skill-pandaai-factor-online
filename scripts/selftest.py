@@ -41,8 +41,11 @@ def run_payload(long_excess="10.00%", turnover="60.00%", short_excess="-5.00%",
                 groups=tuple(f"分组{i}" for i in range(1, 11))) -> dict:
     rows = [{"group": g,
              "excessAnnualized": long_excess if g == "分组10" else short_excess,
-             "turnoverRate": turnover} for g in groups]
-    return {"success": True, "results": {"factor_analysis": {
+             "turnoverRate": turnover,
+             "sharpeRatio": "1.25" if g == "分组10" else "0.75",
+             "maxDrawdown": "12.00%" if g == "分组10" else "15.00%",
+             "monthlyWinRate": "60.00%" if g == "分组10" else "55.00%"} for g in groups]
+    return {"success": True, "factor_run_id": "run-demo", "results": {"factor_analysis": {
         "query_factor_analysis_data": [
             {"indicator": "IC_mean", "factor1": 0.02},
             {"indicator": "Rank_IC", "factor1": 0.05},
@@ -232,6 +235,13 @@ class Extract(unittest.TestCase):
         metrics = batch.extract(run_payload(turnover="60.00%"), "1")
         self.assertAlmostEqual(batch.cost_of(metrics, 5, 0.003), 60 * 0.003 * 2 * (252 / 5))
 
+    def test_extract_preserves_direction_selected_risk_metrics(self):
+        self.assertEqual(batch.extract(run_payload(), "1")["long_sharpe"], 1.25)
+        negative = batch.extract(run_payload(), "0")
+        self.assertEqual(negative["long_sharpe"], 0.75)
+        self.assertEqual(negative["long_max_drawdown"], 15.0)
+        self.assertEqual(negative["long_monthly_win_rate"], 55.0)
+
 
 class BatchRun(unittest.TestCase):
     """Drives main() with the CLI stubbed out, so nothing leaves the machine."""
@@ -337,6 +347,19 @@ class BatchRun(unittest.TestCase):
         saved = json.loads(self.state.read_text(encoding="utf-8"))
         self.assertIn("五日反转", saved)
         self.assertFalse(list(self.tmp.glob("*.tmp")), "atomic write left a temporary file behind")
+
+    def test_batch_writes_raw_response_and_reusable_reports(self):
+        self.file.write_text("稳健因子 ~ BIAS(CLOSE,5) ~ 1\n", encoding="utf-8")
+        self.assertEqual(self.main(), 0)
+        state = json.loads(self.state.read_text(encoding="utf-8"))
+        raw_path = self.tmp / state["稳健因子"]["raw_result"]
+        self.assertEqual(json.loads(raw_path.read_text(encoding="utf-8"))["factor_run_id"], "run-demo")
+        csv_path = self.tmp / "candidates.report.csv"
+        md_path = self.tmp / "candidates.report.md"
+        self.assertIn("long_sharpe", csv_path.read_text(encoding="utf-8"))
+        report = md_path.read_text(encoding="utf-8")
+        self.assertIn("稳健因子", report)
+        self.assertIn("single-factor diagnostics", report)
 
 
 class Spearman(unittest.TestCase):
@@ -547,6 +570,32 @@ class Environment(unittest.TestCase):
             bootstrap.report_cli_version("/tool/python")
         self.assertIn("pandaai-cli 0.1.6", out.getvalue())
         self.assertIn("uv tool upgrade pandaai-cli", out.getvalue())
+
+    def test_skill_update_probe_reports_behind_without_pulling(self):
+        outputs = {
+            "remote": subprocess.CompletedProcess([], 0, stdout="https://github.com/quantskills/skill-pandaai-factor-online.git\n", stderr=""),
+            "fetch": subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            "local": subprocess.CompletedProcess([], 0, stdout="local\n", stderr=""),
+            "upstream": subprocess.CompletedProcess([], 0, stdout="remote\n", stderr=""),
+            "counts": subprocess.CompletedProcess([], 0, stdout="0 2\n", stderr=""),
+        }
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            key = {"remote": "remote", "fetch": "fetch", "rev-parse":
+                   "local" if len(calls) == 3 else "upstream", "rev-list": "counts"}[command[3]]
+            return outputs[key]
+
+        out = io.StringIO()
+        with (patch.object(bootstrap.shutil, "which", return_value="/usr/bin/git"),
+              patch.object(bootstrap.subprocess, "run", side_effect=fake_run),
+              patch.object(bootstrap.Path, "exists", return_value=True),
+              contextlib.redirect_stdout(out)):
+            bootstrap.check_skill_update(Path("/skill"))
+        self.assertIn("2 commit(s) behind", out.getvalue())
+        self.assertTrue(any("fetch" in call for call in calls))
+        self.assertFalse(any("pull" in call for call in calls))
 
     def test_references_load_under_an_ascii_locale(self):
         env = {**os.environ, "LC_ALL": "C", "LANG": "C",
