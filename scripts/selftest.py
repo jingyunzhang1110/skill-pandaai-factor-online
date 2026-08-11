@@ -407,14 +407,38 @@ class Turnover(unittest.TestCase):
 class CompetitionProxy(unittest.TestCase):
     def test_a_uses_recent_five_years_plus_marked_oos(self):
         records = [
-            {"date": "2021-08-08", "value": 0.9, "sample_type": "in_sample"},
-            {"date": "2020-01-08", "value": -0.2, "sample_type": "out_of_sample"},
-            {"date": "2026-07-08", "value": 0.1, "sample_type": "in_sample"},
+            {"date": "2021-08-08", "value": 0.9, "ic": 0.9, "sample_type": "in_sample"},
+            {"date": "2020-01-08", "value": -0.2, "ic": -0.03, "sample_type": "out_of_sample"},
+            {"date": "2026-07-08", "value": 0.1, "ic": 0.04, "sample_type": "in_sample"},
         ]
         result = competition_proxy.score_a(records, competition_proxy.parse_date("2026-08-09"))
         self.assertEqual(list(result["monthly_rank_ic"]), ["2020-01", "2026-07"])
         self.assertEqual(result["metrics"]["periods"], 2)
         self.assertAlmostEqual(result["metrics"]["win_rate"], 0.5)
+        self.assertAlmostEqual(result["metrics"]["rank_ic_mean"], -0.05)
+        self.assertAlmostEqual(result["metrics"]["icir"], 0.005 / statistics.stdev([-0.03, 0.04]))
+
+    def test_a_five_year_window_is_anchored_to_effective_date(self):
+        records = [
+            {"date": "2020-06-01", "value": 0.10, "ic": 0.03},
+            {"date": "2021-06-01", "value": 0.20, "ic": 0.04},
+            {"date": "2026-08-01", "value": 0.90, "ic": 0.05},
+        ]
+        result = competition_proxy.score_a(
+            records, competition_proxy.parse_date("2026-08-11"),
+            factor_effective_date=competition_proxy.parse_date("2026-01-01"))
+        self.assertEqual(result["metrics"]["periods"], 2)
+        self.assertAlmostEqual(result["metrics"]["rank_ic_mean"], 0.55)
+
+    def test_negative_direction_uses_negative_ic_win_threshold(self):
+        records = [
+            {"date": "2026-01-01", "value": -0.10, "ic": -0.03},
+            {"date": "2026-01-08", "value": -0.20, "ic": -0.01},
+            {"date": "2026-01-15", "value": -0.30, "ic": -0.04},
+        ]
+        result = competition_proxy.score_a(records, competition_proxy.parse_date("2026-08-11"),
+                                            direction=-1)
+        self.assertAlmostEqual(result["metrics"]["win_rate"], 2 / 3)
 
     def test_b_is_unavailable_without_post_effective_records(self):
         result = competition_proxy.score_b(
@@ -424,17 +448,21 @@ class CompetitionProxy(unittest.TestCase):
         self.assertIn("no post-effective", result["reason"])
 
     def test_c_applies_the_published_monthly_formula(self):
-        month = {"month": "2026-07", "excess_month": 0.01,
-                 "daily_excess_returns": [0.01, -0.005, 0.004],
+        month = {"month": "2026-07",
+                 "portfolio_daily_returns": [0.01, -0.005, 0.004],
+                 "benchmark_daily_returns": [0.002, -0.001, 0.001],
                  "turnover": 0.05, "max_drawdown": 0.1}
         result = competition_proxy.score_c([month])
         row = result["monthly"][0]
-        daily = month["daily_excess_returns"]
-        sharpe = statistics.mean(daily) / statistics.stdev(daily) * ((22 * 12) ** 0.5)
-        expected = ((1.01 ** 12 - 1) / 0.3 * sharpe * (1 - 1.2 * 0.1))
+        portfolio, benchmark = month["portfolio_daily_returns"], month["benchmark_daily_returns"]
+        rex = ((1 + competition_proxy.product_return(portfolio)) ** (252 / 3) - 1
+               - ((1 + competition_proxy.product_return(benchmark)) ** (252 / 3) - 1))
+        sharpe = statistics.mean(portfolio) / statistics.stdev(portfolio) * (252 ** 0.5)
+        expected = (max(rex, 0) / 0.3 * sharpe * (1 - 1.2 * 0.1))
         self.assertTrue(result["available"])
         self.assertAlmostEqual(row["raw"], expected)
         self.assertAlmostEqual(row["nc"], min(max(expected / 0.6, 0), 1))
+        self.assertTrue(row["official_daily_ledger"])
 
     def test_c_skips_an_incomplete_month(self):
         result = competition_proxy.score_c(

@@ -162,7 +162,7 @@ def cmd_turnover(args) -> int:
     print(f"  {side}-decile turnover {turnover:.1%} replaced per rebalance"
           f" (direction {args.direction})")
     print(f"  rank autocorrelation   {statistics.mean(autocorr):+.2f} over {args.cycle} days")
-    print(f"  implied annual cost    {cost:.1%} at {args.round_trip:.2%} round trip")
+    print(f"  implied annual cost    {cost:.1%} at {args.round_trip:.2%} one-way cost (2x for buys and sells)")
     print("\nSubtract the cost from the top-group excess return before ranking candidates.")
     return 0
 
@@ -182,7 +182,7 @@ def main() -> int:
                    help="1 = high factor values are the long side, 0 = low values are")
     t.add_argument("--cycle", type=int, default=5, help="rebalance cycle in trading days")
     t.add_argument("--sample", type=int, default=30, help="number of rebalances to sample")
-    t.add_argument("--round-trip", type=float, default=0.003, help="round-trip trading cost")
+    t.add_argument("--round-trip", type=float, default=0.003, help="one-way trading cost")
     t.set_defaults(func=cmd_turnover)
 
     args = ap.parse_args()

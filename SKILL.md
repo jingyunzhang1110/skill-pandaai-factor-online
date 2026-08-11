@@ -48,9 +48,9 @@ quantSkills:
     { "key": "end_date", "type": "date", "label": "回测结束日期（先按服务端实际上限）" },
     { "key": "cycle", "type": "number", "label": "调仓周期（1-10 个交易日）" },
     { "key": "group_number", "type": "number", "label": "收益分组数（2-10，默认推荐 10）" },
-    { "key": "round_trip", "type": "number", "label": "双向交易成本（小数，如 0.003）" }
+    { "key": "round_trip", "type": "number", "label": "单边交易成本（小数，如 0.003）" }
   ],
-  "prompt_template": "任务：{{task}}\n阶段：{{stage}}\n回测区间：{{start_date}} 至 {{end_date}}（先按服务端实际上限）\n调仓周期：{{cycle}} 日\n分组数：{{group_number}}（默认推荐 10）\n双向成本：{{round_trip}}\n附件：{{#attachments}}\n\n先检查 CLI 版本，再用短区间探测服务端回测上限；按 SKILL.md 流程执行，并按用户选择的目标排序候选。"
+  "prompt_template": "任务：{{task}}\n阶段：{{stage}}\n回测区间：{{start_date}} 至 {{end_date}}（先按服务端实际上限）\n调仓周期：{{cycle}} 日\n分组数：{{group_number}}（默认推荐 10）\n单边成本：{{round_trip}}\n附件：{{#attachments}}\n\n先检查 CLI 版本，再用短区间探测服务端回测上限；按 SKILL.md 流程执行，并按用户选择的目标排序候选。"
 }
 ```
 
@@ -337,7 +337,8 @@ the pool's rebalance cycle, stock-pool setting, and decile reporting before crea
 candidate. The formal screening window is the five years ending on the intended submission date; a
 short probe only validates syntax and fields, never replaces A. For each five-year result,
 `scripts/collect_results.py --cycle <pool cycle>` samples the CLI RankIC chart at the shared rebalance
-dates and aggregates it monthly for an A proxy. Keep all candidates and failures in the research
+dates. RankIC is averaged across valid rebalance periods; ICIR and directional win rate use the matching
+Pearson IC sequence directly, without monthly RankIC substitution. Keep all candidates and failures in the research
 registry, then screen the direction-selected long side with cost and risk as a C history proxy. B is
 unavailable until genuine post-effective records exist. Label every local result a proxy; do not submit
 a pool or claim an official score automatically. Details: [`references/competition_rules.md`](references/competition_rules.md).
@@ -348,13 +349,26 @@ without accepting a clearly negative, cost-adjusted long side. A user may explic
 similar to today. Both are pre-submission research filters; they feed one formal pool, and only new
 post-effective observations become B.
 
-**Competition metric reminders.** IC win rate is directional `IC > 0.02` or `IC < -0.02`, not merely
-`IC > 0`; RankIC and ICIR use the pool rebalance dates and RankIC is then aggregated monthly. C uses
-the sum of all rebalance turnovers in the month, daily in-month net-value data for SR and MaxDD, and
-returns after the one-way 0.3% cost. After pool submission, add/delete changes are restricted to
-days 1--3 of each month; additions enter on the next shared rebalance, formula/code edits reset
-post-effective history, and a name-only edit outside that window does not. The 50-new-factors-per-day
-limit applies to human and Agent tracks, with the Beijing 07:00 date boundary.
+**Competition metric reminders.** IC is Pearson and RankIC is Spearman. IC win rate is directional
+`IC > 0.02` or `IC < -0.02`, not merely `IC > 0`; all four statistics use shared rebalance
+periods, with RankIC averaged across valid periods and ICIR computed directly from the full IC
+sequence without annualization. C separately compounds portfolio and benchmark daily returns and
+annualizes each with `252 / N`; SR uses after-cost portfolio daily returns and `sqrt(252)`. C turnover
+is the sum of `sum(abs(w_new - w_old))/2` over monthly rebalance dates and can exceed 100%; monthly
+NAV resets to 1 for calculation while real holdings carry across months. After pool submission,
+add/delete changes are restricted to days 1--3 and the platform's 19:00 cutoff; additions enter on
+the next shared rebalance and the first IC arrives at the following shared rebalance. Formula/code
+edits reset post-effective history, and a name-only edit does not. The latest 0811 guidance states a
+50-factor pool cap for Skill and manual submissions; verify any separate daily cap from the platform.
+
+**Snapshot and leaderboard reminders.** A factor's five-year A window is fixed when it enters the
+pool; it does not roll monthly while the version is unchanged. Monthly official settlement uses the
+month-end official snapshot; a revised snapshot replaces the official one, and preview is display-only.
+Do not count the same month twice. Missing months are omitted rather than filled with zero. Quarterly
+quality uses the arithmetic means of valid month-end Na and Nb; quarterly excess return averages each
+valid month's separately annualized AnnualRex; quarterly robustness uses quarterly mean SR minus twice
+the MaxDD of the worst month. The annual leaderboard sums monthly final points and never recomputes
+A/B/C from an annual raw ledger.
 
 **Combination selection is a separate layer.** With six or more candidates, first screen them on the
 same five-year A window, cost-adjusted long side, and cross-sectional redundancy, then enumerate
@@ -434,7 +448,7 @@ annual cost ≈ turnover × round_trip_cost × (252 / rebalance_days)
 ```
 
 The reported `turnoverRate` is the share of the decile replaced each rebalance, so with ten groups it
-saturates near 90%. Use **0.3% as the default round-trip cost** — roughly commission plus stamp duty
+saturates near 90%. Use **0.3% as the default one-way cost** — roughly commission plus stamp duty
 plus slippage for A-share retail execution — rather than asking the user to supply one; raise it if
 they trade small caps or size, and say which figure you used. At a 5-day cycle and 0.3%, 60%
 turnover costs about 9 points a year. `batch.py` applies this and ranks by the net figure.

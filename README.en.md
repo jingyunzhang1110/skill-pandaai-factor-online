@@ -178,7 +178,7 @@ available it runs one for real, confirming the preflight explains itself instead
 | --- | --- |
 | 🔐 Credentials belong to the user | The user runs the login command; never print or commit the config file, token, or uid |
 | 💰 Runs consume credits | Creating a factor is free; treat completed-run `billing.deducted` as authoritative, check `balance`, validate on a short window, then batch the rest |
-| 📅 Server-verified backtest cap | The latest host-side check accepted five years and rejected ten; probe again in each session, and use a second object only for research OOS |
+| 📅 Backtest window | Probe the current server capability at each session; five years before intended submission is the competition A-first default, while ten years depends on account and server access |
 | 📊 Judge on net long-side excess | The long-short headline is not the conclusion; convert turnover to an annual cost first |
 | 🧪 Statistical discipline | Keep every candidate tested, failures included, as the multiple-testing denominator |
 | 🚫 Description, not recommendation | Research structure and factual summaries only, never investment advice |
@@ -203,4 +203,4 @@ This project is licensed under the GNU General Public License v3.0. See [LICENSE
 
 ## qsh-form declaration (optional enhancement)
 
-The ` ```json qsh-form ` block in SKILL.md declares this skill's custom run form on quantskillhub: stage, backtest window, rebalance cycle and round-trip cost are assembled straight into the prompt. CI validates the declaration on push; locally, run `node scripts/validate-qsh-form.mjs SKILL.md`. Without the block the skill page falls back to the generic input box, with no loss of function.
+The ` ```json qsh-form ` block in SKILL.md declares this skill's custom run form on quantskillhub: stage, backtest window, rebalance cycle and one-way trading cost are assembled straight into the prompt. CI validates the declaration on push; locally, run `node scripts/validate-qsh-form.mjs SKILL.md`. Without the block the skill page falls back to the generic input box, with no loss of function.

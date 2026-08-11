@@ -188,7 +188,7 @@ def main() -> int:
                 if records:
                     ic = ic_records(payload, args.cycle)
                     result = score_a(records, dt.date.fromisoformat(records[-1]["date"][:10]),
-                                     direction=int(row["direction"]), win_records=ic)
+                                     direction=int(row["direction"]), ic_records=ic)
                     item["A_proxy"] = {
                         "score": result["score"], "anchor": result["anchor"],
                         "metrics": result["metrics"], "rebalance_observations": len(records),
@@ -197,7 +197,7 @@ def main() -> int:
                     }
                 c_months = c_proxy_months(payload, row["direction"], args.cycle)
                 if c_months:
-                    result = score_c(c_months, periods_per_year=(22 * 12) / args.cycle)
+                    result = score_c(c_months)
                     item["C_rebalance_proxy"] = {
                         "score": result["score"], "anchor": result["anchor"],
                         "months": len(result["monthly"]),

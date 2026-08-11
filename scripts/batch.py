@@ -207,7 +207,7 @@ def report(state: dict, candidates: list[dict], cycle: int, round_trip: float,
               f"{str(m.get('ic_p_value')):>7} {str(m['monotonicity']):>6} {m['long_excess']:>8.2f} "
               f"{m['turnover']:>7.2f} {cost:>7.2f} {net:>8.2f}")
     print(f"\nlong% is the excess return of the direction-selected, equal-weighted extreme 1/{group_number}; "
-          f"net% subtracts annual turnover cost at {round_trip:.2%} one-way (2x round trip).")
+          f"net% subtracts annual turnover cost at {round_trip:.2%} one-way (buy and sell are counted separately).")
     print("IC_p is the p-value of the IC_mean t-statistic. Rank_IC has no p-value of its own.")
 
     failed = [c["name"] for c in candidates if state.get(c["name"], {}).get("error")]

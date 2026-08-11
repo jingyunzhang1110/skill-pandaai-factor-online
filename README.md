@@ -156,7 +156,7 @@ Python 脚本只依赖标准库。改过 `scripts/` 后跑一次 `python3 script
 | --- | --- |
 | 🔐 凭据归用户 | 登录命令交给用户执行；不打印、不提交配置文件、token 与 uid |
 | 💰 运行会扣算力 | 创建因子免费；以完成运行返回的 `billing.deducted` 为准，先查 `balance`、短区间验证，再批量跑 |
-| 📅 回测上限以服务端实测为准 | 当前已验证服务端最长 5 年；启动新会话仍需探测，样本外验证必须另建因子对象 |
+| 📅 回测窗口 | 每次启动按当前服务端能力探测；比赛 A-first 默认提交日前近 5 年，10 年是否可用取决于账号与服务端权限 |
 | 📊 按多头净超额评判 | 多空年化不作为结论；换手率一律折算成年化成本后再排序 |
 | 🧪 统计纪律 | 保留全部候选（含失败）作为多重检验的分母 |
 | 🚫 只述不荐 | 输出研究结构与事实归纳，不构成任何投资建议 |
@@ -180,4 +180,4 @@ This project is licensed under the GNU General Public License v3.0. See [LICENSE
 
 ## qsh-form 表单声明（可选增强）
 
-SKILL.md 中的 ` ```json qsh-form ` 围栏块声明该技能在 quantskillhub 运行页的定制表单：阶段、回测区间、调仓周期与双向成本会直接组装进提示词。推送时 CI 自动校验声明合法性；本地自检：`node scripts/validate-qsh-form.mjs SKILL.md`。无此块时技能页退化为通用主输入框，功能不受影响。
+SKILL.md 中的 ` ```json qsh-form ` 围栏块声明该技能在 quantskillhub 运行页的定制表单：阶段、回测区间、调仓周期与单边成本会直接组装进提示词。推送时 CI 自动校验声明合法性；本地自检：`node scripts/validate-qsh-form.mjs SKILL.md`。无此块时技能页退化为通用主输入框，功能不受影响。
