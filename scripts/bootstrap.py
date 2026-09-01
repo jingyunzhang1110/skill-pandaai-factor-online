@@ -112,9 +112,7 @@ def check_cli() -> str | None:
         else:
             print("\n  Neither uv nor pipx is installed. Either get uv first, which keeps the CLI")
             print("  in its own environment and on PATH:")
-            print("    curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS / Linux"
-                  if not WINDOWS else
-                  '    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"   # Windows')
+            print("    Install uv from its official documentation after reviewing the installer and checksum.")
             print("    uv tool install pandaai-cli")
             print("\n  Or install straight into this Python, which is simpler but can leave the")
             print("  command off PATH depending on how Python was installed:")

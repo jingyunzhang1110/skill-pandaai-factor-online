@@ -64,8 +64,7 @@ The only prerequisite is Python 3.10 or newer. Without it, `uv` is the shortest 
 no Python of its own:
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh                  # macOS / Linux
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"       # Windows
+# Install uv from its official documentation after reviewing the installer and published checksum.
 
 uv python install 3.12
 uv tool install pandaai-cli

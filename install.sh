@@ -10,10 +10,9 @@ done
 cat >&2 <<'EOF'
 No Python 3.10 or newer on PATH.
 
-uv is the shortest way out: it needs no Python itself, and installs both Python
-and the PandaAI CLI.
+Install uv from its official documentation after reviewing the installer and its
+published checksum, then run:
 
-  curl -LsSf https://astral.sh/uv/install.sh | sh
   uv python install 3.12
   uv tool install pandaai-cli
 

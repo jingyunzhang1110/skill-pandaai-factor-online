@@ -51,8 +51,7 @@
 前置只有 Python 3.10 或更新。没有或版本过旧时，`uv` 是最短路径，它自身不依赖 Python：
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh                  # macOS / Linux
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"       # Windows
+# Install uv from its official documentation after reviewing the installer and published checksum.
 
 uv python install 3.12
 uv tool install pandaai-cli
