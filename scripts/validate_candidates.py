@@ -114,7 +114,7 @@ STRICT_POSITIVE_FEATURES = {
     "float_market_cap", "cap", "mkt_freeshares", "float_shares",
 }
 NONNEGATIVE_FEATURES = STRICT_POSITIVE_FEATURES | {"volume", "amount", "turnover", "stom_month"}
-FUTURE_TOKENS = re.compile(r"future|forward|label|target", re.I)
+FUTURE_TOKENS = re.compile(r"future|forward|next|label|target|return_t_plus", re.I)
 
 
 class ValidationError(ValueError):

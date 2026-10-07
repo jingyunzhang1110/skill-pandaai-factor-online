@@ -101,5 +101,19 @@ class Tests(unittest.TestCase):
         self.assertEqual(out["records"],[])
         self.assertEqual(report["rejected_count"],1)
 
+    def test_bundled_example_is_directly_accepted(self):
+        import json
+        bank=vc.load_bank(ROOT/"mother_bank"/"clean_seed_factor_bank.json")
+        payload=json.loads((ROOT/"examples"/"new_factor_batch.example.json").read_text(encoding="utf-8"))
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(report["accepted_count"],1,report)
+        self.assertEqual(report["rejected_count"],0,report)
+        self.assertEqual(set(out),{"schema_version","batch_name","source","records"})
+        self.assertEqual(len(out["records"]),1)
+
+    def test_future_like_feature_name_rejected(self):
+        with self.assertRaises(vc.ValidationError):
+            vc.canonicalize(F("next_close"),self.allowed)
+
 if __name__=="__main__":
     unittest.main()
