@@ -1,17 +1,17 @@
 # Candidate output schema
 
-The AI should write UTF-8 JSON in this shape:
+Write UTF-8 JSON in this shape:
 
 ```json
 {
   "schema_version": 1,
-  "source": "deepseek-harness-pandaai-skill",
+  "source": "factor-mining-skill",
   "allow_parameter_variants": false,
   "allow_zero_mask": false,
   "candidates": [
     {
       "name": "example_candidate",
-      "source_code": "DS-0001",
+      "source_code": "FM-0001",
       "family": "momentum",
       "direction": 1,
       "hypothesis": "medium-horizon continuation after controlling short-horizon noise",
@@ -49,4 +49,4 @@ The validator adds:
 - `audit` and `data_readiness`;
 - warnings and duplicate diagnostics in the report.
 
-The canonical AST is always authoritative. Human-readable formula text must never be used to bypass AST validation.
+The canonical AST is always authoritative. Human-readable formula text must never bypass AST validation.

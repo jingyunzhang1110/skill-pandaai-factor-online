@@ -6,5 +6,4 @@ runs/
 cache/
 accepted_candidates.json
 audit_report.json
-pandaai_candidates.txt
-pandaai_export_report.json
+candidate_batch.json

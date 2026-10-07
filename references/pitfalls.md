@@ -6,11 +6,11 @@ Never use forward returns, labels, future prices, negative lags, restated financ
 
 ## Cross-sectional versus time-series semantics
 
-`rank` and `zscore` are cross-sectional transforms; rolling `rank` is a time-series position. Do not swap them. A formula can be syntactically valid and economically different because of this distinction.
+`rank` and `zscore` are cross-sectional transforms; rolling `rank` is a time-series position. Do not swap them. A syntactically valid formula can still have the wrong economic meaning.
 
 ## Warm-up
 
-Long windows reduce early coverage. State the longest lookback and do not treat warm-up NaNs as zeros.
+Long windows reduce early coverage. State the longest lookback and never turn warm-up NaNs into zeros.
 
 ## Zero-mask conditionals
 
@@ -22,11 +22,11 @@ Profit, cash flow, slopes, spreads and changes can cross zero. Ratios involving 
 
 ## Balance-sheet versus flow items
 
-Assets, liabilities, equity, cash and inventory are point-in-time stocks. Revenue, profit and cash-flow statement items are period flows. Never create a four-quarter sum of a balance-sheet stock merely because a source platform names it `_ttm`.
+Assets, liabilities, equity and cash are point-in-time stocks. Revenue, profit and cash-flow statement items are period flows. Do not invent TTM sums for balance-sheet stocks.
 
 ## Redundant monotonic transforms
 
-If the downstream strategy ranks stocks, `x`, `rank(x)`, `zscore(x)`, positive affine transforms and other monotonic wrappers often encode the same ordering. Do not count them as independent discoveries.
+If downstream selection ranks stocks, `x`, `rank(x)`, `zscore(x)`, positive affine transforms and other monotonic wrappers often encode the same ordering. Do not count them as independent discoveries.
 
 ## Size and industry exposure
 
@@ -34,12 +34,12 @@ Value, liquidity, turnover and many fundamental ratios can be dominated by marke
 
 ## Multiple testing
 
-A winner found after hundreds of trials is weaker evidence than the same result from ten pre-specified trials. Record every tested candidate, including failures.
+A winner found after hundreds of trials is weaker evidence than the same result from ten pre-specified trials. Keep a complete campaign ledger, including rejected and failed candidates.
 
-## Transaction cost and turnover
+## Turnover and implementation
 
-High IC does not guarantee an investable signal. Keep turnover and rebalance frequency in view; PandaAI and factors_lab may model execution differently.
+High predictive correlation does not guarantee an investable signal. High-frequency or unstable signals can be dominated by trading frictions later in the factors_lab evaluation pipeline.
 
 ## Regime dependence
 
-Inspect stability across years and market regimes. A factor dominated by one interval should not be treated as universally valid.
+A factor dominated by one historical interval should not later be treated as universally valid. Stability must be assessed by the downstream evaluation system.

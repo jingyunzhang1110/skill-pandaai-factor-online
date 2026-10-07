@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source": "deepseek-harness-pandaai-skill",
+  "source": "factor-mining-skill",
   "allow_parameter_variants": false,
   "allow_zero_mask": false,
   "candidates": [
     {
       "name": "price_volume_confirmation_example",
-      "source_code": "DS-EX-001",
+      "source_code": "FM-EX-001",
       "family": "price-volume",
       "direction": 1,
       "hypothesis": "medium-horizon price strength is more credible when recent turnover is above its own slower baseline",

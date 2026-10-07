@@ -1,18 +1,27 @@
-# factors_lab-compatible PandaAI Factor Skill
+# factors_lab Factor Mining Skill
 
-This fork of `quantskills/skill-pandaai-factor-online` is specialized for `jingyunzhang1110/factors_lab`.
+A pure factor-mining skill for `jingyunzhang1110/factors_lab`.
 
-The primary representation is now the factors_lab canonical AST. The bundled 549-factor mother bank is the deduplication baseline. PandaAI remains optional as a secondary online diagnostic only for candidates that can be translated losslessly into a safe PandaAI formula subset.
+It has one job: generate new A-share factor hypotheses that are valid in the factors_lab canonical AST and reject incompatible or redundant candidates before they reach the research pipeline.
 
-Key guarantees:
+It does not run external backtests, submit factors to third-party platforms, or depend on a specific AI runtime.
 
-- only factors_lab fields and AST operators are allowed;
-- no future fields or negative lags;
-- exact and rank-equivalent duplicates against the mother bank are rejected;
-- exact/rank-equivalent duplicates inside a batch are rejected;
-- parameter-only variants inside one batch are rejected by default;
+Core guarantees:
+
+- bundled snapshot of the current 549-factor mother bank;
+- only factors_lab-supported features, AST kinds and operators are allowed;
+- negative lags, future-looking inputs, invalid constants and invalid windows are rejected;
+- exact AST duplicates, statically provable rank-equivalent duplicates, within-batch duplicates and parameter-only batch variants are screened;
 - zero-mask conditionals such as `IF(condition, signal, 0)` are rejected by default;
-- output canonical expressions match the factors_lab mother-bank representation;
-- PandaAI syntax never defines the research contract.
+- formal 16-digit factor IDs are never assigned here.
 
-Read `SKILL.md` or `SKILL.zh-CN.md` for the full workflow.
+Validate every batch with:
+
+```bash
+python scripts/validate_candidates.py \
+  --input candidate_batch.json \
+  --output accepted_candidates.json \
+  --report audit_report.json
+```
+
+Only accepted candidates should be passed to factors_lab for actual value computation and evaluation.

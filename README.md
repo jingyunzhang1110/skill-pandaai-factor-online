@@ -1,23 +1,43 @@
-# factors_lab 兼容版 PandaAI 因子 Skill
+# factors_lab 因子挖掘 Skill
 
-这是从 `quantskills/skill-pandaai-factor-online` fork 后重构的专用版本，服务于 `jingyunzhang1110/factors_lab`。
+这是一个**纯因子挖掘 Skill**，专门为 `jingyunzhang1110/factors_lab` 生成新的 A 股选股因子候选。
 
-目标只有一个：**让 AI 生成的新因子从出生起就能进入 factors_lab 的母库表达体系，同时保留 PandaAI 在线回测作为可选的二级筛选。**
+它不负责在线回测、不负责向任何第三方平台提交因子，也不绑定 Codex、Claude、Cursor 或其他运行时。它只做三件事：
+
+1. 基于清晰的经济/市场机制提出新的因子假设；
+2. 把候选写成 factors_lab 原生 canonical AST；
+3. 在输出前对字段、算子、未来信息、母库重复和批内重复做严格审计。
 
 ## 核心约束
 
 - 内置当前 factors_lab 的 549 因子母库快照；
-- 生成表达式必须使用 factors_lab canonical AST；
-- 只能使用当前 factors_lab 已支持的字段、AST kind 和算子；
-- 禁止未来字段、负 lag、非有限常数和无效窗口；
-- 在输出前必须同时检查：
-  - 与 549 母库的 canonical AST 完全重复；
-  - 与 549 母库的横截面排序等价重复；
-  - 同一候选批次内部的完全/排序等价重复；
-  - 同一批中只改窗口或常数的参数-only 变体；
-  - `IF(condition, signal, 0)` / `IF(condition, 0, signal)` 这类大规模 0 并列风险；
-- PandaAI 只作为可选在线诊断，不是母库语法的权威来源；
-- 因子是否最终进入 factors_lab，仍由 factors_lab 自己的单因子/多因子流程决定。
+- 只能使用当前 factors_lab 已支持的字段、AST kind 与算子；
+- 禁止未来字段、负 lag、非有限常数和非法窗口；
+- 必须检查：
+  - canonical AST 完全重复；
+  - 与母库的静态可证明排序等价重复；
+  - 批内完全/排序等价重复；
+  - 同批只改窗口或常数的 parameter-only 变体；
+  - `IF(condition, signal, 0)` 这类大面积 0 并列风险；
+- 方向元数据不能把同一个暴露包装成“新因子”；
+- 不给候选分配正式 16 位 factor_id，ID 仍由 factors_lab 母库流程负责。
+
+## 推荐工作流
+
+1. 读取 `SKILL.zh-CN.md`；
+2. 读取 `mother_bank/MANIFEST.json`、`references/factors_lab_contract.md`、`references/dedup_policy.md`、`references/pitfalls.md` 和 `references/playbook.md`；
+3. 先设计机制不同的候选，再写公式；
+4. 按 `references/output_schema.md` 输出 `candidate_batch.json`；
+5. 强制运行：
+
+```bash
+python scripts/validate_candidates.py \
+  --input candidate_batch.json \
+  --output accepted_candidates.json \
+  --report audit_report.json
+```
+
+只有 `accepted_candidates.json` 中的候选才算通过本 Skill 的静态准入。
 
 ## 目录
 
@@ -33,12 +53,9 @@ references/
   pitfalls.md
   playbook.md
   output_schema.md
-  pandaai_online.md
 scripts/
   validate_candidates.py
-  export_pandaai_manifest.py
-  batch.py
-  analyze.py
+  refresh_mother_bank.py
   bootstrap.py
   selftest.py
 tests/
@@ -47,37 +64,17 @@ examples/
   candidate_batch.example.json
 ```
 
-## 推荐工作流
+## 边界
 
-1. AI 读取 `SKILL.zh-CN.md` 和母库；
-2. 先提出机制不同的候选，不做参数暴力枚举；
-3. 输出 `candidate_batch.json`；
-4. 强制运行：
+这个 Skill **不做回测**，也不根据历史收益给候选打分。真正的因子值计算、单因子评价、去重、最终测试和多因子组合仍交给 factors_lab。
 
-```bash
-python scripts/validate_candidates.py \
-  --input candidate_batch.json \
-  --output accepted_candidates.json \
-  --report audit_report.json
-```
+## 母库更新
 
-5. 只有 `accepted_candidates.json` 里的候选才算合格；
-6. 如需 PandaAI 在线筛选，再运行：
+当 factors_lab 母库发生变化后，用：
 
 ```bash
-python scripts/export_pandaai_manifest.py \
-  --input accepted_candidates.json \
-  --output pandaai_candidates.txt \
-  --report pandaai_export_report.json
+python scripts/refresh_mother_bank.py \
+  --source <factors_lab>/common_factor/catalog/clean_seed_factor_bank.json
 ```
 
-7. 对成功导出的候选，可继续复用原项目成熟的 `scripts/batch.py` 在线创建/回测；
-8. 最终通过者再交回 factors_lab 做本地正式评估。
-
-## 关于 PandaAI
-
-PandaAI 的字段、算子、股票池、数据口径与 factors_lab 不完全一致。因此本项目不再允许 AI 直接写 PandaAI 公式作为主输出。`export_pandaai_manifest.py` 只对可安全等价转换的 AST 子集生成 PandaAI 公式；不能转换的候选仍可用于 factors_lab，但不会被送去 PandaAI。
-
-## 来源与许可
-
-本仓库 fork 自 `quantskills/skill-pandaai-factor-online`，保留原仓库 LICENSE。此次改造删除了 Codex、Claude、Cursor、Hermes 等运行时专用配置，并将研究契约改为 factors_lab-first。
+更新快照后重新执行自检，再开始新的挖掘批次。

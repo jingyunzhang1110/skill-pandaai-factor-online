@@ -1,33 +1,33 @@
 # Factor generation playbook
 
-## Step 1 — define the campaign
+## 1. Define the mining campaign
 
-State candidate count, target families, rebalance horizon, exclusions and whether PandaAI online diagnostics will be used.
+State the desired candidate count, target families, exclusions and intended holding/rebalance horizon. The horizon informs mechanism design but does not change the static validation contract.
 
-## Step 2 — inspect the mother bank
+## 2. Inspect the mother bank
 
-Search the 549-factor snapshot for the intended mechanism, not just the exact name. If the bank already contains the same ordering exposure, choose another mechanism.
+Search the 549-factor snapshot for the intended mechanism, inputs and ranking exposure. Avoid rediscovering an existing factor through a different name, reciprocal, sign flip, monotonic wrapper or nearby parameter.
 
-## Step 3 — propose mechanisms before formulas
+## 3. Propose mechanisms before formulas
 
-For each candidate write one sentence answering: what market behavior should make this signal predictive, and why should the direction be positive or negative?
+For each idea write one sentence explaining why the signal may contain cross-sectional information and why the expected direction is plausible.
 
-## Step 4 — translate into factors_lab AST
+## 4. Prefer orthogonal hypotheses
 
-Use only the current contract. Prefer simple expressions. Add normalization only when it changes the economic meaning or controls a real scale problem.
+Spread the batch across different economic mechanisms. Do not spend the batch budget on a parameter grid.
 
-## Step 5 — diversify
+## 5. Translate into factors_lab AST
 
-A good batch spans multiple families. Avoid filling a batch with many versions of one momentum or valuation idea.
+Use only the current contract. If the idea cannot be represented faithfully, discard it. Do not widen the contract during a mining run.
 
-## Step 6 — static audit
+## 6. Check numerical robustness
 
-Run `validate_candidates.py`. Replace rejected candidates with new mechanisms rather than cosmetic rewrites.
+Review denominators, logarithms, square roots, long lookbacks, missing-value sensitivity and conditionals. Reject fragile formulas before validation.
 
-## Step 7 — optional PandaAI screen
+## 7. Static audit
 
-Export only the losslessly translatable subset. Use PandaAI results as diagnostics, not as the final acceptance standard. Preserve all attempted candidates in the experiment ledger.
+Run `validate_candidates.py`. Replace rejected candidates with genuinely new mechanisms rather than cosmetic rewrites.
 
-## Step 8 — local formal evaluation
+## 8. Hand off to factors_lab
 
-Candidates that survive the source-stage screen still need the normal factors_lab single-factor evaluation, deduplication and multi-factor workflow.
+The Skill stops after static acceptance. Empirical quality is determined later by the normal factors_lab pipeline.
