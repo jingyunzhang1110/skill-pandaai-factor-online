@@ -661,7 +661,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
         metrics = expression_metrics(expr)
         record = {
             "name": str(raw.get("name") or label),
-            "source": str(payload.get("source") or "deepseek-harness-pandaai-skill"),
+            "source": str(payload.get("source") or "factor-mining-skill"),
             "source_number": index + 1,
             "source_code": str(raw.get("source_code") or f"DS-{index+1:04d}"),
             "original_formula": formula,
@@ -685,7 +685,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
     warnings = [x for x in findings if x["severity"] == "warning"]
     output = {
         "format_version": 1,
-        "source": str(payload.get("source") or "deepseek-harness-pandaai-skill"),
+        "source": str(payload.get("source") or "factor-mining-skill"),
         "mother_bank_factor_count": len(bank["factors"]),
         "factor_count": len(accepted),
         "factors": accepted,
