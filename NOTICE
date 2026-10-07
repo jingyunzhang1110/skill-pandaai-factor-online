@@ -1,13 +1,18 @@
-This repository is a user fork and substantial adaptation of:
-  quantskills/skill-pandaai-factor-online
+This repository is a user fork and substantial adaptation of the upstream project
+quantskills/skill-pandaai-factor-online.
+
+The current codebase is a pure factors_lab factor-mining skill. It retains no
+third-party factor-platform integration, account/login workflow, remote factor
+creation, remote backtest, platform field/operator contract, or platform-specific
+export path.
 
 The adapted version is specialized for:
   jingyunzhang1110/factors_lab
 
-Major changes include removal of Codex/Claude/Cursor/Hermes runtime adapters,
-replacement of PandaAI-first formula generation with factors_lab canonical AST output,
-a bundled 549-factor mother-bank snapshot, strict exact/rank-equivalent deduplication,
-and a conservative optional exporter back to PandaAI formula syntax.
+Major changes include a bundled 549-factor mother-bank snapshot, factors_lab
+canonical-AST output, strict field/operator compatibility checks, future-information
+guards, exact and rank-equivalent deduplication, and parameter-variant diversity
+controls.
 
 The original repository license remains in LICENSE. No endorsement by the upstream
 maintainers is implied.
