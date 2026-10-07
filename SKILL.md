@@ -1,92 +1,78 @@
 ---
 name: factors-lab-factor-mining
-description: Generate novel A-share factor hypotheses that are strictly compatible with jingyunzhang1110/factors_lab, using only the bundled mother-bank feature/operator contract and rejecting exact, rank-equivalent, parameter-only, future-looking, or otherwise incompatible candidates before output.
+description: Generate novel A-share factor hypotheses and emit a JSON batch that can be passed directly to jingyunzhang1110/factors_lab common_factor import-factors. Use only the bundled factors_lab field/operator contract; reject unsupported AST, future information, exact/rank-equivalent duplicates, parameter-only variants, and structurally unsafe candidates before handoff.
 ---
 
 # Factor Mining for factors_lab
 
-This is a **pure factor-discovery skill**. It does not run external platform backtests, create remote factors, submit factors, or depend on a vendor-specific agent runtime.
+This Skill has one output contract: **a validated factors_lab import batch JSON**.
 
-Before generating any candidate, read:
+The final JSON produced by this Skill must be directly usable as:
+
+```powershell
+python .\common_factor\top.py import-factors .\ready_for_factors_lab.json
+```
+
+No manual conversion is allowed between the Skill output and factors_lab.
+
+Before generating a batch, read:
 
 - `mother_bank/MANIFEST.json`
 - `references/factors_lab_contract.md`
+- `references/output_schema.md`
 - `references/dedup_policy.md`
 - `references/pitfalls.md`
 - `references/playbook.md`
-- `references/output_schema.md`
+- `examples/new_factor_batch.example.json`
 
 ## Hard rules
 
-1. The authoritative formula representation is factors_lab `canonical_expression` AST.
-2. Use only the exact allowed features, AST kinds and operators in the bundled contract.
-3. Never invent aliases, macros, technical indicators or financial fields outside that contract.
-4. Never use future labels, future prices, negative lags or information unavailable at the factor date.
-5. Do not assign formal 16-digit factor IDs.
-6. Run `scripts/validate_candidates.py` before presenting any candidate as valid.
-7. Reject exact duplicates against the mother bank and the current batch.
-8. Reject statically provable rank-equivalent duplicates. Direction metadata does not make the same exposure new.
-9. Reject parameter-only variants within a generation batch by default. A mining batch should explore mechanisms, not a grid of nearby windows.
-10. Reject zero-mask conditionals such as `IF(condition, signal, 0)` by default because they create large cross-sectional ties.
-11. Prefer simple, interpretable expressions unless added complexity has an explicit economic purpose.
-12. If a denominator can cross or approach zero, either redesign the factor or explicitly flag the numerical risk; do not hide it with an arbitrary epsilon.
-13. Preserve failed/rejected candidates in the audit report rather than silently rewriting them into something else.
+1. The only authoritative formula representation is `canonical_expression` in the exact factors_lab AST schema.
+2. Use only the feature names, AST kinds, operators and parameters explicitly listed in `references/factors_lab_contract.md`.
+3. Never invent aliases, macros, technical-indicator names, vendor fields, report-specific field names or new operators.
+4. Never use future labels, future prices, negative lags or data unavailable at the factor date.
+5. Never write `factor_id`, `expression_fingerprint`, `duplicate_type`, `representation`, `parse_error` or `import_batch`. factors_lab owns those fields.
+6. Output top-level JSON must be exactly `schema_version`, `batch_name`, `source`, `records`.
+7. Each record must use only: `source_record_id`, `name`, `source`, `source_ref`, `formula_provenance`, `original_formula`, `economic_rationale`, `source_constraints`, `canonical_expression`.
+8. Every `source_record_id` must be unique. Prefer `FM-YYYYMMDD-BATCH-####` or another batch-scoped globally unique pattern.
+9. AST limits mirror factors_lab static audit: at most 64 nodes, depth at most 12, lookback at most 2520 trading days.
+10. Reject exact duplicates against the mother bank and current batch.
+11. Reject statically provable rank-equivalent duplicates. Reversing sign/direction does not create a new factor.
+12. Reject parameter-only variants inside one mining batch. Do not spend a batch on nearby windows/constants.
+13. Reject zero-mask conditionals such as `IF(condition, signal, 0)` or `IF(condition, 0, signal)`.
+14. A denominator that can approach/cross zero must be redesigned or explicitly disclosed in `source_constraints`; never hide the problem with an arbitrary epsilon.
+15. Do not approximate an unsupported idea with a different supported signal. Drop it.
+16. A batch is not ready until `scripts/validate_candidates.py` accepts it.
 
-## Mining process
+## Required generation process
 
-### 1. Inspect the mother bank
+First define the economic mechanism, expected behavior, horizon, required fields and failure mode. Then build the AST from the allowed contract. Do not start from a fancy formula and invent a story afterward.
 
-Search for the intended economic mechanism, not only formula text. A new name or algebraic rearrangement is not a new factor.
+Generate the JSON directly in the schema shown in `examples/new_factor_batch.example.json`. `original_formula` is human-readable provenance; `canonical_expression` is the executable truth.
 
-### 2. Design hypotheses before formulas
-
-For each candidate define:
-
-- family;
-- economic or behavioral mechanism;
-- expected direction;
-- required fields;
-- time horizon;
-- main failure mode;
-- why it is not already represented in the mother bank.
-
-### 3. Preserve diversity
-
-A batch should span genuinely different mechanisms where possible: momentum/reversal, volatility/distribution shape, liquidity/turnover, price-volume interaction, value, profitability/quality, cash-flow quality, growth, leverage, capital investment, event/benchmark-relative structure, and cross-sectional neutralized variants.
-
-Do not fill a batch with many windows of the same formula.
-
-### 4. Translate to canonical AST
-
-Use only the exact contract. If an idea cannot be expressed without unsupported fields/operators, drop it rather than approximating it with a different signal.
-
-### 5. Static audit
-
-Run:
+Validate every batch:
 
 ```bash
-python scripts/validate_candidates.py --input candidate_batch.json \
-  --output accepted_candidates.json --report audit_report.json
+python scripts/validate_candidates.py \
+  --input generated_batch.json \
+  --output ready_for_factors_lab.json \
+  --report audit_report.json
 ```
 
-Only accepted candidates are valid outputs of this Skill.
+Only `ready_for_factors_lab.json` may be handed to factors_lab.
 
-### 6. Hand off
+## Handoff boundary
 
-This Skill stops after static factor-generation audit. factors_lab owns factor ID allocation, factor-value computation, single-factor testing, empirical deduplication, final-test isolation and multi-factor selection.
+The Skill stops after static mining validation. factors_lab then owns:
 
-## What counts as duplicate
+```text
+ready_for_factors_lab.json
+→ common_factor import-factors
+→ append-only RAW shard
+→ Factor Registry (factors.sqlite)
+→ single_factor
+→ accepted / empirical dedup
+→ multi_factor
+```
 
-The validator conservatively recognizes, among other cases:
-
-- identical canonical AST;
-- `x`, `rank(x)`, `zscore(x)` and positive scaling when they preserve the same ordering;
-- sign-flipped versions as reverse-order equivalents;
-- positive affine transforms;
-- `log(x)` or `sqrt(x)` when positivity is provable;
-- redundant `abs(x)` when non-negativity is provable;
-- reciprocal positive ratios as reverse-order equivalents;
-- `sum(condition,N)/N` versus `mean(condition,N)`;
-- same batch structure differing only by windows/constants.
-
-Static checks are intentionally conservative. The model must still perform economic-semantic deduplication.
+The Skill never allocates formal 16-digit IDs and never edits factors_lab RAW itself.

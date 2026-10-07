@@ -53,6 +53,61 @@ FUNCTION_SPECS: dict[str, tuple[int, bool, bool]] = {
 }
 GROUPS = {"industry", "sector", "subindustry"}
 
+# Strict factors_lab mining whitelist. This is intentionally narrower than
+# "any column the loader might happen to see": every generated factor must use
+# a canonical field that the current factors_lab panel layer knows how to
+# materialise with point-in-time semantics.
+ALLOWED_FEATURES = {
+    "adj_close", "aggregate_book_value", "aggregate_earnings",
+    "aggregate_market_cap", "amount", "avg_total_assets", "basic_eps",
+    "benchmark_close", "benchmark_open", "book_equity", "book_to_price",
+    "cap", "capex", "cfo", "cfo_q", "cfo_ttm", "close", "common_equity",
+    "dividend", "dividend_1y", "earnings", "ebit", "ebitda",
+    "enterprise_value", "executive_compensation_top3", "factor_return",
+    "float_cap_weighted_market_index", "float_market_cap", "float_shares",
+    "free_cash_flow", "gross_profit", "hd", "high", "holder_avgpct",
+    "illiq_3m", "interest_bearing_debt", "ld", "long_term_debt", "low",
+    "market_cap", "mkt_freeshares", "net_cash_flow", "net_income",
+    "net_income_ex_nr", "net_income_ex_nr_q", "net_income_ex_nr_ttm",
+    "net_income_q", "net_income_ttm", "open", "operating_profit_q",
+    "operating_profit_ttm", "parent_equity_ex_minority",
+    "parent_net_income", "parent_net_income_q", "parent_net_income_ttm",
+    "preferred_equity", "ret", "returns", "sales", "sales_q", "sales_ttm",
+    "self", "sse_composite_close", "stom_month", "total_assets",
+    "total_debt", "tr", "turnover", "volume", "vwap",
+}
+
+AST_KEYS = {
+    "feature": {"kind", "name", "lag"},
+    "constant": {"kind", "value"},
+    "unary": {"kind", "operator", "operand"},
+    "binary": {"kind", "operator", "left", "right"},
+    "rolling": {"kind", "operator", "operand", "window", "min_periods", "parameter"},
+    "pair_rolling": {"kind", "operator", "left", "right", "window", "min_periods"},
+    "comparison": {"kind", "operator", "left", "right"},
+    "logical": {"kind", "operator", "left", "right"},
+    "conditional": {"kind", "condition", "if_true", "if_false"},
+    "scale": {"kind", "operand", "target"},
+    "group_neutralize": {"kind", "operand", "group"},
+    "function": {"kind", "operator", "operands", "window", "parameter"},
+}
+
+MAX_NODES = 64
+MAX_DEPTH = 12
+MAX_LOOKBACK = 2520
+
+# Mirrors factors_lab FeatureDimensionCatalog.default() where the dimension is
+# known. Missing entries deliberately remain "unknown", matching factors_lab.
+DIMENSIONLESS_FEATURES = {
+    "returns", "ret", "book_to_price", "illiq_3m", "factor_return",
+}
+PRICE_FEATURES = {
+    "open", "high", "low", "close", "vwap", "benchmark_close",
+    "benchmark_open", "sse_composite_close", "float_cap_weighted_market_index",
+}
+SHARES_FEATURES = {"volume"}
+MONEY_FEATURES = {"amount", "cap", "market_cap", "float_market_cap", "book_equity"}
+
 # Conservative positivity set used only for safe rank-equivalence proofs.
 STRICT_POSITIVE_FEATURES = {
     "open", "high", "low", "close", "adj_close", "vwap", "market_cap",
@@ -87,27 +142,23 @@ def load_bank(path: Path = DEFAULT_BANK) -> dict[str, Any]:
 
 
 def bank_features(bank: dict[str, Any]) -> set[str]:
-    result: set[str] = set()
-    def walk(node: Any) -> None:
-        if not isinstance(node, dict):
-            return
-        if node.get("kind") == "feature":
-            result.add(str(node.get("name", "")).strip())
-        for value in node.values():
-            if isinstance(value, dict):
-                walk(value)
-            elif isinstance(value, list):
-                for item in value:
-                    walk(item)
-    for factor in bank["factors"]:
-        walk(factor.get("canonical_expression"))
-    return result
+    # Kept as a function for existing callers/tests; the contract is static and
+    # authoritative, not inferred from whatever happens to exist in the bank.
+    return set(ALLOWED_FEATURES)
 
 
 def canonicalize(node: Any, allowed_features: set[str]) -> dict[str, Any]:
     if not isinstance(node, dict):
         raise ValidationError("expression node must be an object")
     kind = str(node.get("kind", "")).strip().lower()
+    allowed_keys = AST_KEYS.get(kind)
+    if allowed_keys is None:
+        raise ValidationError(f"unknown expression kind {kind!r}")
+    extra_keys = sorted(set(node) - allowed_keys)
+    if extra_keys:
+        raise ValidationError(
+            f"{kind} contains unsupported keys: {', '.join(extra_keys)}"
+        )
 
     if kind == "feature":
         name = str(node.get("name", "")).strip().casefold()
@@ -566,6 +617,140 @@ def render_formula(node: dict[str, Any]) -> str:
     raise AssertionError(kind)
 
 
+def _dim_add(a: tuple[int, int, int] | None, b: tuple[int, int, int] | None) -> tuple[int, int, int] | None:
+    if a is None or b is None:
+        return None
+    return tuple(x + y for x, y in zip(a, b))
+
+
+def _dim_sub(a: tuple[int, int, int] | None, b: tuple[int, int, int] | None) -> tuple[int, int, int] | None:
+    if a is None or b is None:
+        return None
+    return tuple(x - y for x, y in zip(a, b))
+
+
+def validate_dimension(node: dict[str, Any]) -> tuple[int, int, int] | None:
+    dimless = (0, 0, 0)
+    price = (1, 0, 0)
+    shares = (0, 1, 0)
+    money = (1, 1, 0)
+    kind = node["kind"]
+
+    if kind == "constant":
+        return dimless
+    if kind == "feature":
+        name = node["name"]
+        if name in DIMENSIONLESS_FEATURES:
+            return dimless
+        if name in PRICE_FEATURES:
+            return price
+        if name in SHARES_FEATURES:
+            return shares
+        if name in MONEY_FEATURES:
+            return money
+        return None
+    if kind == "unary":
+        operand = validate_dimension(node["operand"])
+        op = node["operator"]
+        if op in {"abs", "neg"}:
+            return operand
+        if op in {"sign", "rank", "zscore"}:
+            return dimless
+        if op in {"log", "exp"}:
+            if operand is not None and operand != dimless:
+                raise ValidationError(f"{op} requires dimensionless input")
+            return operand
+        if op == "sqrt":
+            if operand is None:
+                return None
+            if any(value % 2 for value in operand):
+                raise ValidationError("sqrt requires an exact even physical dimension")
+            return tuple(value // 2 for value in operand)
+    if kind == "binary":
+        left = validate_dimension(node["left"])
+        right = validate_dimension(node["right"])
+        op = node["operator"]
+        if op in {"add", "sub", "max", "min"}:
+            if left is None or right is None:
+                return None
+            if left != right:
+                raise ValidationError(
+                    f"{op} requires equal dimensions, got {left} and {right}"
+                )
+            return left
+        if op == "mul":
+            return _dim_add(left, right)
+        if op == "div":
+            return _dim_sub(left, right)
+        if op in {"pow", "signed_power"}:
+            if left is None:
+                return None
+            if left == dimless:
+                return dimless
+            exponent = node["right"]
+            if exponent.get("kind") != "constant":
+                if op == "pow":
+                    raise ValidationError("pow on dimensioned input requires integer constant exponent")
+                return None
+            value = float(exponent["value"])
+            if int(value) != value:
+                if op == "pow":
+                    raise ValidationError("pow on dimensioned input requires integer constant exponent")
+                return None
+            return tuple(x * int(value) for x in left)
+    if kind == "rolling":
+        operand = validate_dimension(node["operand"])
+        if node["operator"] in {"rank", "argmax", "argmin", "rsquare", "skew"}:
+            return dimless
+        return operand
+    if kind == "pair_rolling":
+        left = validate_dimension(node["left"])
+        right = validate_dimension(node["right"])
+        return dimless if node["operator"] == "corr" else _dim_add(left, right)
+    if kind in {"comparison", "logical"}:
+        if kind == "comparison":
+            validate_dimension(node["left"])
+            validate_dimension(node["right"])
+        else:
+            validate_dimension(node["left"])
+            validate_dimension(node["right"])
+        return dimless
+    if kind == "conditional":
+        validate_dimension(node["condition"])
+        a = validate_dimension(node["if_true"])
+        b = validate_dimension(node["if_false"])
+        if a is None or b is None:
+            return None
+        if a != b:
+            raise ValidationError(
+                f"conditional branches require equal dimensions, got {a} and {b}"
+            )
+        return a
+    if kind in {"scale", "group_neutralize"}:
+        return validate_dimension(node["operand"])
+    if kind == "function":
+        dims = [validate_dimension(x) for x in node["operands"]]
+        op = node["operator"]
+        if op in {
+            "weighted_mean", "previous_month_max", "exp_weighted_sum",
+            "exp_weighted_std", "cumulative_range", "wma",
+            "cross_section_weighted_mean", "regression_alpha",
+            "regression_resid_std", "multi_regression_residual",
+        }:
+            return dims[0]
+        if op in {"regression_beta", "masked_regression_beta"}:
+            return _dim_sub(dims[0], dims[1])
+        if op in {
+            "monthly_regression_alpha", "monthly_beta_resid_product",
+            "cmra", "cross_section_median_ratio",
+        }:
+            return dimless
+        if op == "cross_section_long_short":
+            return dims[1]
+        return None
+    raise ValidationError(f"cannot infer dimension for kind {kind!r}")
+
+
 def _bank_indexes(bank: dict[str, Any], allowed_features: set[str]) -> tuple[dict[str, list[dict]], dict[str, list[dict]], dict[str, list[dict]]]:
     exact: dict[str, list[dict]] = {}
     ranked: dict[str, list[dict]] = {}
@@ -587,35 +772,105 @@ def _bank_indexes(bank: dict[str, Any], allowed_features: set[str]) -> tuple[dic
 
 
 def _candidate_label(item: dict[str, Any], index: int) -> str:
-    return str(item.get("source_code") or item.get("name") or f"candidate-{index+1}")
+    return str(item.get("source_record_id") or item.get("name") or f"record-{index+1}")
 
 
 def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(payload, dict) or not isinstance(payload.get("candidates"), list):
-        raise ValidationError("input must be an object with a candidates list")
-    allowed = bank_features(bank)
-    exact_bank, rank_bank, skeleton_bank = _bank_indexes(bank, allowed)
-    allow_parameter_variants = bool(payload.get("allow_parameter_variants", False))
-    allow_zero_mask = bool(payload.get("allow_zero_mask", False))
+    if not isinstance(payload, dict):
+        raise ValidationError("input must be a JSON object")
+    allowed_top = {"schema_version", "batch_name", "source", "records"}
+    extra_top = sorted(set(payload) - allowed_top)
+    if extra_top:
+        raise ValidationError(f"unsupported top-level keys: {', '.join(extra_top)}")
+    if payload.get("schema_version") != 1:
+        raise ValidationError("schema_version must be 1")
+    batch_name = str(payload.get("batch_name") or "").strip()
+    source = str(payload.get("source") or "").strip()
+    records = payload.get("records")
+    if not batch_name:
+        raise ValidationError("batch_name is required")
+    if not source:
+        raise ValidationError("source is required")
+    if not isinstance(records, list) or not records:
+        raise ValidationError("records must be a non-empty list")
 
+    allowed = set(ALLOWED_FEATURES)
+    exact_bank, rank_bank, skeleton_bank = _bank_indexes(bank, allowed)
     findings: list[dict[str, Any]] = []
     accepted: list[dict[str, Any]] = []
     seen_exact: dict[str, str] = {}
     seen_rank: dict[str, tuple[str, int]] = {}
     seen_skeleton: dict[str, str] = {}
+    seen_source_ids: set[str] = set()
 
-    for index, raw in enumerate(payload["candidates"]):
+    record_keys = {
+        "source_record_id", "name", "source", "source_ref",
+        "formula_provenance", "original_formula", "economic_rationale",
+        "source_constraints", "canonical_expression",
+    }
+
+    for index, raw in enumerate(records):
         label = _candidate_label(raw if isinstance(raw, dict) else {}, index)
         if not isinstance(raw, dict):
-            findings.append({"candidate": label, "severity": "error", "code": "INVALID_RECORD", "message": "candidate must be an object"})
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "INVALID_RECORD", "message": "record must be an object",
+            })
             continue
+
+        extra = sorted(set(raw) - record_keys)
+        if extra:
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "UNSUPPORTED_RECORD_KEYS",
+                "message": f"unsupported keys: {', '.join(extra)}",
+            })
+            continue
+
         try:
-            direction = raw.get("direction")
-            if direction not in (0, 1):
-                raise ValidationError("direction must be 0 (lower better) or 1 (higher better)")
+            source_record_id = str(raw.get("source_record_id") or "").strip()
+            name = str(raw.get("name") or "").strip()
+            record_source = str(raw.get("source") or source).strip()
+            source_ref = str(raw.get("source_ref") or "").strip()
+            formula_provenance = str(raw.get("formula_provenance") or "").strip()
+            original_formula = str(raw.get("original_formula") or "").strip()
+            rationale = str(raw.get("economic_rationale") or "").strip()
+            constraints = str(raw.get("source_constraints") or "").strip()
+
+            if not source_record_id:
+                raise ValidationError("source_record_id is required")
+            if source_record_id in seen_source_ids:
+                raise ValidationError(f"duplicate source_record_id in batch: {source_record_id}")
+            seen_source_ids.add(source_record_id)
+            if not name:
+                raise ValidationError("name is required")
+            if not record_source:
+                raise ValidationError("source is required")
+            if not original_formula:
+                raise ValidationError("original_formula is required")
+            if not rationale:
+                raise ValidationError("economic_rationale is required")
+
             expr = canonicalize(raw.get("canonical_expression"), allowed)
+            metrics = expression_metrics(expr)
+            if metrics["nodes"] > MAX_NODES:
+                raise ValidationError(
+                    f"AST has too many nodes: {metrics['nodes']} > {MAX_NODES}"
+                )
+            if metrics["depth"] > MAX_DEPTH:
+                raise ValidationError(
+                    f"AST is too deep: {metrics['depth']} > {MAX_DEPTH}"
+                )
+            if metrics["lookback"] > MAX_LOOKBACK:
+                raise ValidationError(
+                    f"AST lookback too long: {metrics['lookback']} > {MAX_LOOKBACK}"
+                )
+            validate_dimension(expr)
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
-            findings.append({"candidate": label, "severity": "error", "code": "INVALID_EXPRESSION", "message": str(exc)})
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "INVALID_EXPRESSION_OR_SCHEMA", "message": str(exc),
+            })
             continue
 
         fp = fingerprint(expr)
@@ -624,28 +879,57 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
         rejected = False
 
         if fp in exact_bank:
-            matches = [{"factor_id": f.get("factor_id"), "name": f.get("name")} for f in exact_bank[fp][:8]]
-            findings.append({"candidate": label, "severity": "error", "code": "EXACT_DUPLICATE", "matches": matches})
+            matches = [
+                {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                for f in exact_bank[fp][:8]
+            ]
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "EXACT_DUPLICATE", "matches": matches,
+            })
             rejected = True
         elif rkey in rank_bank:
-            matches = [{"factor_id": f.get("factor_id"), "name": f.get("name")} for f in rank_bank[rkey][:8]]
-            findings.append({"candidate": label, "severity": "error", "code": "RANK_EQUIVALENT_DUPLICATE", "orientation": orientation, "matches": matches})
+            matches = [
+                {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                for f in rank_bank[rkey][:8]
+            ]
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "RANK_EQUIVALENT_DUPLICATE",
+                "orientation": orientation, "matches": matches,
+            })
             rejected = True
 
         if fp in seen_exact:
-            findings.append({"candidate": label, "severity": "error", "code": "BATCH_EXACT_DUPLICATE", "matches": [seen_exact[fp]]})
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "BATCH_EXACT_DUPLICATE", "matches": [seen_exact[fp]],
+            })
             rejected = True
         elif rkey in seen_rank:
             previous, previous_orientation = seen_rank[rkey]
-            findings.append({"candidate": label, "severity": "error", "code": "BATCH_RANK_EQUIVALENT_DUPLICATE", "matches": [previous], "orientation_relation": orientation * previous_orientation})
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "BATCH_RANK_EQUIVALENT_DUPLICATE",
+                "matches": [previous],
+                "orientation_relation": orientation * previous_orientation,
+            })
             rejected = True
 
-        if not allow_parameter_variants and skey in seen_skeleton and not rejected:
-            findings.append({"candidate": label, "severity": "error", "code": "PARAMETER_ONLY_VARIANT", "matches": [seen_skeleton[skey]]})
+        if skey in seen_skeleton and not rejected:
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "PARAMETER_ONLY_VARIANT",
+                "matches": [seen_skeleton[skey]],
+            })
             rejected = True
 
-        if not allow_zero_mask and contains_zero_mask(expr):
-            findings.append({"candidate": label, "severity": "error", "code": "ZERO_MASK_CONDITIONAL", "message": "conditional branch returns literal 0, creating a large tied cross-section"})
+        if contains_zero_mask(expr):
+            findings.append({
+                "candidate": label, "severity": "error",
+                "code": "ZERO_MASK_CONDITIONAL",
+                "message": "conditional branch returns literal 0, creating a large tied cross-section",
+            })
             rejected = True
 
         if rejected:
@@ -653,30 +937,31 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
 
         near = skeleton_bank.get(skey, [])
         if near:
-            findings.append({"candidate": label, "severity": "warning", "code": "MOTHER_BANK_NEAR_VARIANT", "matches": [{"factor_id": f.get("factor_id"), "name": f.get("name")} for f in near[:5]]})
+            findings.append({
+                "candidate": label, "severity": "warning",
+                "code": "MOTHER_BANK_NEAR_VARIANT",
+                "matches": [
+                    {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                    for f in near[:5]
+                ],
+            })
         for warning in sorted(set(denominator_warnings(expr))):
-            findings.append({"candidate": label, "severity": "warning", "code": "DENOMINATOR_RISK", "message": warning})
+            findings.append({
+                "candidate": label, "severity": "warning",
+                "code": "DENOMINATOR_RISK", "message": warning,
+            })
 
-        formula = render_formula(expr)
-        metrics = expression_metrics(expr)
-        record = {
-            "name": str(raw.get("name") or label),
-            "source": str(payload.get("source") or "factor-mining-skill"),
-            "source_number": index + 1,
-            "source_code": str(raw.get("source_code") or f"DS-{index+1:04d}"),
-            "original_formula": formula,
-            "normalized_formula": formula,
+        accepted.append({
+            "source_record_id": source_record_id,
+            "name": name,
+            "source": record_source,
+            "source_ref": source_ref,
+            "formula_provenance": formula_provenance,
+            "original_formula": original_formula,
+            "economic_rationale": rationale,
+            "source_constraints": constraints,
             "canonical_expression": expr,
-            "expression_fingerprint": fp,
-            "representation": "ast",
-            "metrics": metrics,
-            "audit": {"profile": "factors-lab-source-strict-v1", "passed": True, "issues": []},
-            "data_readiness": {"status": "ready", "missing_features": []},
-            "direction": direction,
-            "family": str(raw.get("family") or "unspecified"),
-            "hypothesis": str(raw.get("hypothesis") or "").strip(),
-        }
-        accepted.append(record)
+        })
         seen_exact[fp] = label
         seen_rank[rkey] = (label, orientation)
         seen_skeleton[skey] = label
@@ -684,15 +969,15 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
     errors = [x for x in findings if x["severity"] == "error"]
     warnings = [x for x in findings if x["severity"] == "warning"]
     output = {
-        "format_version": 1,
-        "source": str(payload.get("source") or "factor-mining-skill"),
-        "mother_bank_factor_count": len(bank["factors"]),
-        "factor_count": len(accepted),
-        "factors": accepted,
+        "schema_version": 1,
+        "batch_name": batch_name,
+        "source": source,
+        "records": accepted,
     }
     report = {
         "schema_version": 1,
-        "candidate_count": len(payload["candidates"]),
+        "batch_name": batch_name,
+        "candidate_count": len(records),
         "accepted_count": len(accepted),
         "rejected_count": len({x["candidate"] for x in errors}),
         "error_count": len(errors),
@@ -705,7 +990,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate factors_lab candidate ASTs against the mother bank")
+    parser = argparse.ArgumentParser(description="Validate a direct factors_lab import batch against the AST contract and mother bank")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK)
     parser.add_argument("--output", type=Path, required=True)

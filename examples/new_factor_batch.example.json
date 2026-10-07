@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "batch_name": "example_20261007",
+  "source": "example-research-report",
+  "records": [
+    {
+      "source_record_id": "EXAMPLE-REPORT-001",
+      "name": "20日相对250日换手率",
+      "source": "示例研报/LLM整理",
+      "source_ref": "示例研报名称，第18页",
+      "formula_provenance": "由研报原始定义整理为 factors_lab AST",
+      "original_formula": "MA(turnover,20) / MA(turnover,250)",
+      "economic_rationale": "衡量近期交易活跃度相对长期水平的变化。",
+      "source_constraints": "真实导入时填写原文约束和适用范围。",
+      "canonical_expression": {
+        "kind": "binary",
+        "operator": "div",
+        "left": {
+          "kind": "rolling",
+          "operator": "mean",
+          "operand": {"kind": "feature", "name": "turnover", "lag": 0},
+          "window": 20
+        },
+        "right": {
+          "kind": "rolling",
+          "operator": "mean",
+          "operand": {"kind": "feature", "name": "turnover", "lag": 0},
+          "window": 250
+        }
+      }
+    }
+  ]
+}

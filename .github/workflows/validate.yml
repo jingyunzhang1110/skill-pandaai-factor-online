@@ -9,4 +9,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: python scripts/bootstrap.py
-      - run: python scripts/validate_candidates.py --input examples/candidate_batch.example.json --output /tmp/accepted.json --report /tmp/report.json
+      - run: python scripts/validate_candidates.py --input examples/new_factor_batch.example.json --output /tmp/ready.json --report /tmp/report.json

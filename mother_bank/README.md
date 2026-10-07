@@ -1,16 +1,29 @@
 # Mother bank snapshot
 
-`clean_seed_factor_bank.json` is copied exactly from:
+`clean_seed_factor_bank.json` in this Skill is **not** a factors_lab runtime file.
 
-`jingyunzhang1110/factors_lab/common_factor/catalog/clean_seed_factor_bank.json`
+It is a local, unique-factor snapshot used only for static duplicate detection while mining. The current snapshot represents the initial factors_lab mother bank:
 
-at factors_lab main commit `d55ed9ecc7bac9de9e472b5de103f485afdc10f0`.
+- 549 unique Factor IDs;
+- 836 historical source records behind those IDs;
+- next ID at that point: `0000000000000550`.
 
-Snapshot facts:
+factors_lab itself now uses:
 
-- factor_count: 549
-- next_factor_id: `0000000000000550`
-- source_record_count: 836
-- Git blob SHA: `8236a49263e84d62cb31976e6ea8b34ec1844928`
+```text
+common_factor/catalog/raw/*.json
+→ bootstrap
+→ factors.sqlite
+```
 
-Refresh the snapshot whenever factors_lab adds or changes factors before starting a new mining campaign.
+and does not maintain `clean_seed_factor_bank.json`.
+
+Before a later mining campaign, refresh this Skill's dedup snapshot from a local factors_lab checkout:
+
+```bash
+python scripts/refresh_mother_bank.py \
+  --source <factors_lab>/common_factor/catalog/raw \
+  --source-commit <current-factors_lab-commit>
+```
+
+The refresh script merges all RAW shards by Factor ID. If an old initial RAW record lacks a canonical AST, the existing Skill snapshot is used only to preserve that already-resolved AST. Newly imported factors already carry canonical AST in their RAW shard.
