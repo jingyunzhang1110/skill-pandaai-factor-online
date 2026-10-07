@@ -1,16 +1,11 @@
-name: Validate qsh-form
-
-on:
-  push:
-  pull_request:
-
+name: validate-example
+on: [push, pull_request]
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 20
-      - name: 校验 qsh-form
-        run: node scripts/validate-qsh-form.mjs SKILL.md
+          python-version: '3.11'
+      - run: python scripts/validate_candidates.py --input examples/candidate_batch.example.json --output /tmp/accepted.json --report /tmp/report.json || test $? -eq 2

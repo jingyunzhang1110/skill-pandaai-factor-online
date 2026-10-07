@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source_repository": "jingyunzhang1110/factors_lab",
+  "source_branch": "main",
+  "source_commit": "d55ed9ecc7bac9de9e472b5de103f485afdc10f0",
+  "source_path": "common_factor/catalog/clean_seed_factor_bank.json",
+  "git_blob_sha": "8236a49263e84d62cb31976e6ea8b34ec1844928",
+  "factor_count": 549,
+  "source_record_count": 836,
+  "next_factor_id": "0000000000000550"
+}

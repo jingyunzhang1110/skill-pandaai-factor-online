@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source": "deepseek-harness-pandaai-skill",
+  "allow_parameter_variants": false,
+  "allow_zero_mask": false,
+  "candidates": [
+    {
+      "name": "price_volume_confirmation_example",
+      "source_code": "DS-EX-001",
+      "family": "price-volume",
+      "direction": 1,
+      "hypothesis": "medium-horizon price strength is more credible when recent turnover is above its own slower baseline",
+      "canonical_expression": {
+        "kind": "binary",
+        "operator": "mul",
+        "left": {
+          "kind": "binary",
+          "operator": "sub",
+          "left": {
+            "kind": "binary",
+            "operator": "div",
+            "left": {"kind": "feature", "name": "close", "lag": 0},
+            "right": {"kind": "feature", "name": "close", "lag": 40}
+          },
+          "right": {"kind": "constant", "value": 1}
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "div",
+          "left": {"kind": "rolling", "operator": "mean", "operand": {"kind": "feature", "name": "turnover", "lag": 0}, "window": 10},
+          "right": {"kind": "rolling", "operator": "mean", "operand": {"kind": "feature", "name": "turnover", "lag": 0}, "window": 60}
+        }
+      }
+    }
+  ]
+}
