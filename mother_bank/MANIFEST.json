@@ -1,11 +1,11 @@
 {
-  "schema_version": 2,
-  "source_repository": "jingyunzhang1110/factors_lab",
-  "source_branch": "main",
-  "source_commit": "9d64d0ac516af464c6ad5b3648565fe3e7f96253",
-  "source_path": "common_factor/catalog/raw",
-  "factor_count": 549,
-  "source_record_count": 836,
-  "next_factor_id": "0000000000000550",
-  "note": "The bundled clean_seed_factor_bank.json is a Skill-only unique-factor dedup snapshot for the initial 549-factor mother bank. factors_lab runtime no longer uses a clean JSON; it bootstraps append-only RAW shards directly into factors.sqlite."
+  "schema_version": 3,
+  "purpose": "local-reference-bank",
+  "initial_snapshot": "clean_seed_factor_bank.json",
+  "initial_factor_count": 549,
+  "initial_source_record_count": 836,
+  "initial_next_factor_id": "0000000000000550",
+  "reference_directory": "mother_bank",
+  "auto_sync": false,
+  "note": "Skill-local reference library only. Additional validated factor JSONs may be placed manually beside the initial 549-factor snapshot. The Skill never reads or refreshes from factors_lab."
 }

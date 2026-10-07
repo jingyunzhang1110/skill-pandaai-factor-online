@@ -1,5 +1,5 @@
 from __future__ import annotations
-import importlib.util, sys, unittest
+import importlib.util, json, sys, tempfile, unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -102,8 +102,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["rejected_count"],1)
 
     def test_bundled_example_is_directly_accepted(self):
-        import json
-        bank=vc.load_bank(ROOT/"mother_bank"/"clean_seed_factor_bank.json")
+        bank=vc.load_bank(ROOT/"mother_bank")
         payload=json.loads((ROOT/"examples"/"new_factor_batch.example.json").read_text(encoding="utf-8"))
         out,report=vc.validate_batch(payload,bank)
         self.assertEqual(report["accepted_count"],1,report)
@@ -114,6 +113,54 @@ class Tests(unittest.TestCase):
     def test_future_like_feature_name_rejected(self):
         with self.assertRaises(vc.ValidationError):
             vc.canonicalize(F("next_close"),self.allowed)
+
+    def test_local_mother_bank_directory_reads_added_record_files(self):
+        expression=B("div",R("mean",F("turnover"),19),R("mean",F("turnover"),73))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"base.json").write_text(
+                json.dumps({"factors":[]}), encoding="utf-8"
+            )
+            (root/"added_001.json").write_text(
+                json.dumps({
+                    "schema_version":1,
+                    "batch_name":"added",
+                    "source":"test",
+                    "records":[{
+                        "source_record_id":"ADDED-001",
+                        "name":"known turnover ratio",
+                        "canonical_expression":expression
+                    }]
+                }),
+                encoding="utf-8",
+            )
+            (root/"MANIFEST.json").write_text(
+                json.dumps({"schema_version":1}), encoding="utf-8"
+            )
+            bank=vc.load_bank(root)
+            self.assertEqual(bank["reference_file_count"],2)
+            self.assertEqual(len(bank["factors"]),1)
+
+            payload={
+                "schema_version":1,
+                "batch_name":"candidate",
+                "source":"test",
+                "records":[{
+                    "source_record_id":"NEW-001",
+                    "name":"duplicate turnover ratio",
+                    "source":"test",
+                    "source_ref":"unit test",
+                    "formula_provenance":"unit test",
+                    "original_formula":"mean(turnover,19)/mean(turnover,73)",
+                    "economic_rationale":"unit test duplicate",
+                    "source_constraints":"",
+                    "canonical_expression":expression
+                }]
+            }
+            out,report=vc.validate_batch(payload,bank)
+            self.assertEqual(out["records"],[])
+            self.assertEqual(report["rejected_count"],1)
+            self.assertIn("added_001.json", str(report["findings"]))
 
 if __name__=="__main__":
     unittest.main()

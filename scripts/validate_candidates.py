@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BANK = ROOT / "mother_bank" / "clean_seed_factor_bank.json"
+DEFAULT_BANK = ROOT / "mother_bank"
 
 UNARY = {"abs", "neg", "sign", "log", "exp", "sqrt", "rank", "zscore"}
 BINARY = {"add", "sub", "mul", "div", "pow", "signed_power", "max", "min"}
@@ -134,11 +134,71 @@ def _finite_number(value: Any, label: str) -> float:
     return out
 
 
+def _reference_records_from_payload(data: dict[str, Any], path: Path) -> list[dict[str, Any]]:
+    if isinstance(data.get("factors"), list):
+        records = data["factors"]
+    elif isinstance(data.get("records"), list):
+        records = data["records"]
+    else:
+        raise ValidationError(
+            f"reference JSON must contain a factors or records list: {path}"
+        )
+
+    output: list[dict[str, Any]] = []
+    for index, raw in enumerate(records, start=1):
+        if not isinstance(raw, dict):
+            raise ValidationError(
+                f"reference record must be an object: {path} record {index}"
+            )
+        expression = raw.get("canonical_expression")
+        if not isinstance(expression, dict):
+            # Provenance-only historical records cannot participate in AST dedup.
+            continue
+        item = dict(raw)
+        item["_reference_file"] = path.name
+        output.append(item)
+    return output
+
+
 def load_bank(path: Path = DEFAULT_BANK) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or not isinstance(data.get("factors"), list):
-        raise ValidationError("mother bank must contain a factors list")
-    return data
+    """Load all local reference-factor JSONs.
+
+    The Skill is standalone. When path is a directory, every JSON file in it
+    except MANIFEST.json is treated as a local reference source. Both the
+    bundled 549-factor snapshot (factors list) and later direct-import batch
+    files (records list) are supported.
+    """
+    source = Path(path)
+    if source.is_file():
+        files = [source]
+    elif source.is_dir():
+        files = sorted(
+            item
+            for item in source.glob("*.json")
+            if item.is_file() and item.name.casefold() != "manifest.json"
+        )
+        if not files:
+            raise ValidationError(f"reference directory contains no factor JSON: {source}")
+    else:
+        raise ValidationError(f"reference path not found: {source}")
+
+    factors: list[dict[str, Any]] = []
+    loaded_files: list[str] = []
+    for item in files:
+        try:
+            data = json.loads(item.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValidationError(f"cannot read reference JSON {item}: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValidationError(f"reference JSON top level must be an object: {item}")
+        factors.extend(_reference_records_from_payload(data, item))
+        loaded_files.append(item.name)
+
+    return {
+        "factors": factors,
+        "reference_files": loaded_files,
+        "reference_file_count": len(loaded_files),
+    }
 
 
 def bank_features(bank: dict[str, Any]) -> set[str]:
@@ -880,7 +940,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
 
         if fp in exact_bank:
             matches = [
-                {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                {"factor_id": f.get("factor_id"), "source_record_id": f.get("source_record_id"), "name": f.get("name"), "reference_file": f.get("_reference_file")}
                 for f in exact_bank[fp][:8]
             ]
             findings.append({
@@ -890,7 +950,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
             rejected = True
         elif rkey in rank_bank:
             matches = [
-                {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                {"factor_id": f.get("factor_id"), "source_record_id": f.get("source_record_id"), "name": f.get("name"), "reference_file": f.get("_reference_file")}
                 for f in rank_bank[rkey][:8]
             ]
             findings.append({
@@ -941,7 +1001,7 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
                 "candidate": label, "severity": "warning",
                 "code": "MOTHER_BANK_NEAR_VARIANT",
                 "matches": [
-                    {"factor_id": f.get("factor_id"), "name": f.get("name")}
+                    {"factor_id": f.get("factor_id"), "source_record_id": f.get("source_record_id"), "name": f.get("name"), "reference_file": f.get("_reference_file")}
                     for f in near[:5]
                 ],
             })
@@ -983,6 +1043,8 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
         "error_count": len(errors),
         "warning_count": len(warnings),
         "mother_bank_factor_count": len(bank["factors"]),
+        "reference_file_count": int(bank.get("reference_file_count", 1)),
+        "reference_files": list(bank.get("reference_files", [])),
         "allowed_feature_count": len(allowed),
         "findings": findings,
     }
@@ -992,7 +1054,12 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate a direct factors_lab import batch against the AST contract and mother bank")
     parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--bank", type=Path, default=DEFAULT_BANK)
+    parser.add_argument(
+        "--bank",
+        type=Path,
+        default=DEFAULT_BANK,
+        help="Local reference factor file or directory; default: mother_bank/",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()

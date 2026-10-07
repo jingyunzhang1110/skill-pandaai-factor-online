@@ -1,25 +1,34 @@
 # factors_lab 因子挖掘 Skill
 
-这是一个面向 `jingyunzhang1110/factors_lab` 的纯因子挖掘 Skill。它现在直接输出 **factors_lab 新版 `import-factors` 可以读取的 JSON**，不再使用旧的 candidate/factors 中间格式。
+这是一个独立的 A 股因子挖掘 Skill。它与 `factors_lab` 不存在运行时依赖，只共享统一的 JSON 与 canonical AST 标准。
 
-核心保证：
+Skill 负责：
 
-1. 只使用固定白名单中的 factors_lab 字段；
-2. 只使用当前 canonical AST 已实现的 kind/operator/参数；
-3. 禁止未来信息、负 lag、非法窗口和未定义 AST key；
-4. 检查 AST 节点数、深度、lookback 和已知量纲冲突；
-5. 与 549 初始母库做 exact / rank-equivalent 去重，并做批内去重；
-6. 默认淘汰 parameter-only 变体和 zero-mask conditional；
-7. Skill 不分配正式 16 位 `factor_id`；
-8. 最终 JSON 可直接进入 factors_lab append-only RAW 导入链。
+1. 根据经济/市场机制提出新因子；
+2. 只使用规定字段和算子构造 canonical AST；
+3. 用 Skill 自己的 `mother_bank/` 参考库做静态去重；
+4. 输出可直接交给 factors_lab `import-factors` 的 JSON。
 
-## 直接接口
+## 本地参考库
 
-按：
+```text
+mother_bank/
+├─ clean_seed_factor_bank.json   # 初始549个
+├─ added_xxx.json                # 用户以后手工加入
+└─ MANIFEST.json
+```
 
-`examples/new_factor_batch.example.json`
+validator 会自动读取这个目录里除 `MANIFEST.json` 外的全部 JSON。
 
-生成批次，然后运行：
+以后如果你希望 Skill 不再重复生成某批新因子，把验证后的 `ready_for_factors_lab.json` 复制一份到 `mother_bank/`，使用唯一文件名保存即可。
+
+完整的人类操作说明：
+
+`HUMAN_GUIDE.zh-CN.md`
+
+## 生成与验证
+
+按 `examples/new_factor_batch.example.json` 生成，然后：
 
 ```bash
 python scripts/validate_candidates.py \
@@ -28,29 +37,14 @@ python scripts/validate_candidates.py \
   --report audit_report.json
 ```
 
-通过后，把 `ready_for_factors_lab.json` 放入 factors_lab，直接执行：
-
-```powershell
-python .\common_factor\top.py import-factors .\ready_for_factors_lab.json
-```
-
-后续由 factors_lab 自动完成：
-
-```text
-AST canonicalize / fingerprint / 历史判重 / ID分配
-→ 新 RAW 分片
-→ factors.sqlite
-→ single_factor
-→ multi_factor
-```
-
-完整规则请读 `SKILL.zh-CN.md`、`references/factors_lab_contract.md` 和 `references/output_schema.md`。
+通过后的 `ready_for_factors_lab.json` 可以手工复制到 factors_lab，再由 factors_lab 自己完成 RAW 判重、ID、Registry、单因子和多因子流程。
 
 ## 目录
 
 ```text
 SKILL.md
 SKILL.zh-CN.md
+HUMAN_GUIDE.zh-CN.md
 mother_bank/
   clean_seed_factor_bank.json
   MANIFEST.json
@@ -62,7 +56,6 @@ references/
   playbook.md
 scripts/
   validate_candidates.py
-  refresh_mother_bank.py
   bootstrap.py
   selftest.py
 tests/
@@ -70,5 +63,3 @@ tests/
 examples/
   new_factor_batch.example.json
 ```
-
-`mother_bank/clean_seed_factor_bank.json` 只是 Skill 内部用于静态去重的“唯一因子快照”，不是 factors_lab 运行时的 clean 文件。factors_lab 当前运行时直接从 append-only RAW 分片 bootstrap 到 `factors.sqlite`。

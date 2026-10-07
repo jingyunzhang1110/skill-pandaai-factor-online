@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preflight for the pure factors_lab factor-mining skill."""
+"""Preflight for the standalone factors_lab-compatible factor-mining Skill."""
 from __future__ import annotations
 
 import importlib.util
@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
 def main() -> int:
     ok = True
     print(f"python={sys.version.split()[0]}")
@@ -16,34 +17,50 @@ def main() -> int:
         print("[FAIL] Python >=3.10 required")
         ok = False
 
-    manifest = ROOT / "mother_bank" / "MANIFEST.json"
-    bank_path = ROOT / "mother_bank" / "clean_seed_factor_bank.json"
+    manifest_path = ROOT / "mother_bank" / "MANIFEST.json"
+    validator_path = ROOT / "scripts" / "validate_candidates.py"
+
     try:
-        meta = json.loads(manifest.read_text(encoding="utf-8"))
-        bank = json.loads(bank_path.read_text(encoding="utf-8"))
-        count = len(bank.get("factors", []))
-        print(f"[OK] mother_bank factors={count} source_commit={meta.get('source_commit')}")
-        if count != int(meta.get("factor_count", -1)):
-            print("[FAIL] manifest factor_count mismatch")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        initial = ROOT / "mother_bank" / str(manifest["initial_snapshot"])
+        payload = json.loads(initial.read_text(encoding="utf-8"))
+        initial_count = len(payload.get("factors", []))
+        expected = int(manifest.get("initial_factor_count", -1))
+        if initial_count != expected:
+            print(
+                f"[FAIL] initial snapshot factor count mismatch: "
+                f"{initial_count} != {expected}"
+            )
             ok = False
-        if bank.get("factor_count") not in (None, count):
-            print("[FAIL] bank factor_count mismatch")
+        else:
+            print(f"[OK] initial mother bank factors={initial_count}")
+        if manifest.get("auto_sync") is not False:
+            print("[FAIL] auto_sync must be false")
             ok = False
     except Exception as exc:
-        print(f"[FAIL] mother bank: {exc}")
+        print(f"[FAIL] mother bank manifest: {exc}")
         ok = False
 
-    validator = ROOT / "scripts" / "validate_candidates.py"
     try:
-        spec = importlib.util.spec_from_file_location("validate_candidates", validator)
+        spec = importlib.util.spec_from_file_location(
+            "validate_candidates", validator_path
+        )
         if spec is None or spec.loader is None:
             raise RuntimeError("cannot load validator")
-        print("[OK] validator importable")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["validate_candidates"] = module
+        spec.loader.exec_module(module)
+        bank = module.load_bank(ROOT / "mother_bank")
+        print(
+            f"[OK] local reference files={bank.get('reference_file_count')} "
+            f"records_with_ast={len(bank.get('factors', []))}"
+        )
     except Exception as exc:
-        print(f"[FAIL] validator: {exc}")
+        print(f"[FAIL] local reference bank: {exc}")
         ok = False
 
     return 0 if ok else 2
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
