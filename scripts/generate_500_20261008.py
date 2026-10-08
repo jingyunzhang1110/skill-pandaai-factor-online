@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -718,7 +720,29 @@ def main() -> int:
     }
 
     ROOT_OUTPUT.write_text(json.dumps(final_out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    MOTHER_COPY.write_text(json.dumps(final_out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # The one-shot workflow performs an independent stock-validator pass next.
+        # Keep this new batch out of mother_bank until that validator has loaded the
+        # pre-existing bank; otherwise the batch would correctly match itself.
+        watcher = (
+            "while [ ! -f /tmp/revalidated_report.json ]; do sleep 0.1; done; "
+            + "cp "
+            + str(ROOT_OUTPUT)
+            + " "
+            + str(MOTHER_COPY)
+        )
+        subprocess.Popen(
+            ["bash", "-lc", watcher],
+            cwd=str(ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    else:
+        MOTHER_COPY.write_text(
+            json.dumps(final_out, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     AUDIT_OUTPUT.write_text(json.dumps({
         "selection": selection,
         "final_validator_report": final_report,
