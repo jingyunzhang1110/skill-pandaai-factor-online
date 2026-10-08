@@ -1,0 +1,35 @@
+name: generate-500-20261008-artifact
+
+on:
+  push:
+    paths:
+      - .github/workflows/generate_500_20261008_artifact.yml
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/selftest.py
+      - name: Snapshot pre-existing mother bank
+        run: |
+          mkdir -p /tmp/preexisting_bank
+          cp mother_bank/*.json /tmp/preexisting_bank/
+      - name: Generate
+        run: python scripts/generate_500_20261008.py
+      - name: Revalidate against pre-existing bank
+        run: |
+          python scripts/validate_candidates.py --bank /tmp/preexisting_bank --input ready_for_factors_lab_20261008_500.json --output /tmp/revalidated.json --report /tmp/revalidated_report.json
+          python -c "import json; a=json.load(open('ready_for_factors_lab_20261008_500.json',encoding='utf-8')); b=json.load(open('/tmp/revalidated.json',encoding='utf-8')); r=json.load(open('/tmp/revalidated_report.json',encoding='utf-8')); assert a==b; assert r['accepted_count']==500 and r['rejected_count']==0 and r['warning_count']==0 and r['mother_bank_factor_count']==849; print(r['accepted_count'],r['warning_count'])"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-500-factor-batch
+          path: |
+            ready_for_factors_lab_20261008_500.json
+            mother_bank/added_20261008_500.json
+            audit_20261008_500.json
+            campaign_20261008_500_selection.json
