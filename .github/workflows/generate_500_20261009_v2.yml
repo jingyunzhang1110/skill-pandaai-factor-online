@@ -1,0 +1,79 @@
+name: generate-500-20261009-v2
+
+on:
+  push:
+    paths:
+      - scripts/generate_500_20261009_v2.py
+      - .github/workflows/generate_500_20261009_v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run repository self-test
+        run: python scripts/selftest.py
+      - name: Snapshot pre-existing mother bank
+        run: |
+          mkdir -p /tmp/preexisting_bank
+          cp mother_bank/*.json /tmp/preexisting_bank/
+      - name: Generate mechanism-diverse candidates
+        run: python scripts/generate_500_20261009_v2.py
+      - name: Revalidate final handoff against pre-existing bank
+        run: |
+          python scripts/validate_candidates.py             --bank /tmp/preexisting_bank             --input ready_for_factors_lab_20261009_500_v2.json             --output /tmp/revalidated.json             --report /tmp/revalidated_report.json
+          python - <<'PY'
+          import importlib.util
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+          a = json.load(open('ready_for_factors_lab_20261009_500_v2.json', encoding='utf-8'))
+          b = json.load(open('/tmp/revalidated.json', encoding='utf-8'))
+          r = json.load(open('/tmp/revalidated_report.json', encoding='utf-8'))
+          assert a == b, 'revalidated output differs from generated output'
+          assert r['accepted_count'] == 500
+          assert r['rejected_count'] == 0
+          assert r['warning_count'] == 0
+          assert r['mother_bank_factor_count'] == 1349
+
+          spec = importlib.util.spec_from_file_location('vc', root/'scripts'/'validate_candidates.py')
+          vc = importlib.util.module_from_spec(spec)
+          assert spec.loader
+          spec.loader.exec_module(vc)
+          lbs = [
+              vc.expression_metrics(vc.canonicalize(x['canonical_expression'], set(vc.ALLOWED_FEATURES)))['lookback']
+              for x in a['records']
+          ]
+          assert max(lbs) <= 250
+          print({
+              'accepted': r['accepted_count'],
+              'warnings': r['warning_count'],
+              'mother_bank_factor_count': r['mother_bank_factor_count'],
+              'max_lookback': max(lbs),
+          })
+          PY
+      - name: Add validated batch to mother bank
+        run: cp ready_for_factors_lab_20261009_500_v2.json mother_bank/added_20261009_500_v2.json
+      - name: Commit validated outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add             ready_for_factors_lab_20261009_500_v2.json             mother_bank/added_20261009_500_v2.json             audit_20261009_500_v2.json             campaign_20261009_500_v2_selection.json
+          git commit -m "add second validated mechanism-diverse 500-factor batch"
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-500-factor-batch-v2
+          path: |
+            ready_for_factors_lab_20261009_500_v2.json
+            mother_bank/added_20261009_500_v2.json
+            audit_20261009_500_v2.json
+            campaign_20261009_500_v2_selection.json
