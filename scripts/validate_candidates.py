@@ -94,7 +94,7 @@ AST_KEYS = {
 
 MAX_NODES = 64
 MAX_DEPTH = 12
-MAX_LOOKBACK = 2520
+MAX_LOOKBACK = 250
 
 # Mirrors factors_lab FeatureDimensionCatalog.default() where the dimension is
 # known. Missing entries deliberately remain "unknown", matching factors_lab.
