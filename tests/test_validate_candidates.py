@@ -110,6 +110,29 @@ class Tests(unittest.TestCase):
         self.assertEqual(set(out),{"schema_version","batch_name","source","records"})
         self.assertEqual(len(out["records"]),1)
 
+    def test_lookback_over_250_rejected(self):
+        bank={"factors":[]}
+        payload={
+            "schema_version":1,
+            "batch_name":"lookback-limit-test",
+            "source":"test",
+            "records":[{
+                "source_record_id":"TEST-LOOKBACK-251",
+                "name":"too long lookback",
+                "source":"test",
+                "source_ref":"unit test",
+                "formula_provenance":"unit test",
+                "original_formula":"delay(close,251)",
+                "economic_rationale":"verify hard lookback limit",
+                "source_constraints":"",
+                "canonical_expression":R("delay",F("close"),251)
+            }]
+        }
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(out["records"],[])
+        self.assertEqual(report["rejected_count"],1)
+        self.assertIn("lookback too long", str(report["findings"]))
+
     def test_future_like_feature_name_rejected(self):
         with self.assertRaises(vc.ValidationError):
             vc.canonicalize(F("next_close"),self.allowed)
