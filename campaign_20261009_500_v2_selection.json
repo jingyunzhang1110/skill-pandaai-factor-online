@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "batch_name": "fm_20261009_500_v2",
+  "mother_bank_factor_count": 1349,
+  "reference_files": [
+    "added_20261007_300.json",
+    "added_20261008_500.json",
+    "clean_seed_factor_bank.json"
+  ],
+  "proposal_count": 26000,
+  "validator_initial_accepted": 25984,
+  "validator_initial_rejected": 16,
+  "validator_initial_warnings": 0,
+  "mechanism_coarse_bank_collisions_removed": 0,
+  "clean_unique_mechanism_count": 25823,
+  "selected_count": 500,
+  "selected_unique_mechanism_signatures": 500,
+  "selected_mother_bank_mechanism_collisions": 0,
+  "max_lookback": 181,
+  "lookback_over_250": 0,
+  "lookback_distribution": {
+    "5": 2,
+    "9": 2,
+    "10": 4,
+    "14": 1,
+    "18": 1,
+    "19": 3,
+    "20": 4,
+    "23": 1,
+    "29": 10,
+    "33": 2,
+    "39": 14,
+    "40": 11,
+    "43": 3,
+    "44": 1,
+    "48": 7,
+    "58": 7,
+    "59": 58,
+    "60": 11,
+    "62": 29,
+    "63": 9,
+    "64": 1,
+    "66": 6,
+    "68": 12,
+    "69": 2,
+    "71": 7,
+    "78": 17,
+    "79": 2,
+    "81": 5,
+    "88": 18,
+    "89": 29,
+    "91": 7,
+    "93": 4,
+    "98": 15,
+    "99": 2,
+    "101": 5,
+    "108": 2,
+    "118": 13,
+    "119": 74,
+    "120": 3,
+    "121": 7,
+    "123": 8,
+    "124": 2,
+    "128": 17,
+    "138": 12,
+    "148": 21,
+    "151": 1,
+    "158": 15,
+    "178": 10,
+    "179": 1,
+    "181": 2
+  },
+  "recipe_count": 50,
+  "recipe_counts": {
+    "R01": 10,
+    "R02": 10,
+    "R03": 10,
+    "R04": 10,
+    "R05": 10,
+    "R06": 10,
+    "R07": 10,
+    "R08": 10,
+    "R09": 10,
+    "R10": 10,
+    "R11": 10,
+    "R12": 10,
+    "R13": 10,
+    "R14": 10,
+    "R15": 10,
+    "R16": 10,
+    "R17": 10,
+    "R18": 10,
+    "R19": 10,
+    "R20": 10,
+    "R21": 10,
+    "R22": 10,
+    "R23": 10,
+    "R24": 10,
+    "R25": 10,
+    "R26": 10,
+    "R27": 10,
+    "R28": 10,
+    "R29": 10,
+    "R30": 10,
+    "R31": 10,
+    "R32": 10,
+    "R33": 10,
+    "R34": 10,
+    "R35": 10,
+    "R36": 10,
+    "R37": 10,
+    "R38": 10,
+    "R39": 10,
+    "R40": 10,
+    "R41": 10,
+    "R42": 10,
+    "R43": 10,
+    "R44": 10,
+    "R45": 10,
+    "R46": 10,
+    "R47": 10,
+    "R48": 10,
+    "R49": 10,
+    "R50": 10
+  },
+  "max_per_recipe": 10,
+  "category_tuple_count": 21,
+  "max_per_category_tuple": 24,
+  "primitive_pattern_count": 18,
+  "max_per_primitive_pattern": 28,
+  "top_features": [
+    [
+      "sales_ttm",
+      44
+    ],
+    [
+      "factor_return",
+      40
+    ],
+    [
+      "enterprise_value",
+      37
+    ],
+    [
+      "float_market_cap",
+      36
+    ],
+    [
+      "illiq_3m",
+      34
+    ],
+    [
+      "market_cap",
+      34
+    ],
+    [
+      "total_assets",
+      34
+    ],
+    [
+      "cap",
+      33
+    ],
+    [
+      "turnover",
+      32
+    ],
+    [
+      "avg_total_assets",
+      32
+    ],
+    [
+      "volume",
+      31
+    ],
+    [
+      "aggregate_market_cap",
+      31
+    ],
+    [
+      "ret",
+      31
+    ],
+    [
+      "cfo_ttm",
+      30
+    ],
+    [
+      "net_cash_flow",
+      30
+    ],
+    [
+      "capex",
+      30
+    ],
+    [
+      "operating_profit_ttm",
+      29
+    ],
+    [
+      "amount",
+      29
+    ],
+    [
+      "long_term_debt",
+      29
+    ],
+    [
+      "interest_bearing_debt",
+      28
+    ],
+    [
+      "preferred_equity",
+      28
+    ],
+    [
+      "parent_net_income_ttm",
+      27
+    ],
+    [
+      "gross_profit",
+      27
+    ],
+    [
+      "free_cash_flow",
+      27
+    ],
+    [
+      "dividend_1y",
+      26
+    ],
+    [
+      "total_debt",
+      26
+    ],
+    [
+      "aggregate_book_value",
+      26
+    ],
+    [
+      "parent_equity_ex_minority",
+      26
+    ],
+    [
+      "ebit",
+      25
+    ],
+    [
+      "net_income_ex_nr_ttm",
+      25
+    ]
+  ]
+}
