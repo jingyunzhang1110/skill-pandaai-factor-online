@@ -131,6 +131,12 @@ QUAD_CATEGORIES = [
     ("other", "profit", "price", "activity"),
     ("shares", "size", "profit", "return"),
     ("equity", "leverage", "activity", "benchmark"),
+    ("sales", "cashflow", "leverage", "activity"),
+    ("quarter", "equity", "benchmark", "return"),
+    ("other", "leverage", "cashflow", "price"),
+    ("shares", "profit", "benchmark", "activity"),
+    ("equity", "cashflow", "return", "price"),
+    ("sales", "quarter", "benchmark", "activity"),
 ]
 
 WINDOWS = [5, 10, 20, 30, 40, 60, 90, 120]
