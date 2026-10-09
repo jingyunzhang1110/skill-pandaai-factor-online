@@ -69,7 +69,7 @@ Skill 不会去 factors_lab 拉取、刷新或同步这些文件。如何人工�
 6. 顶层 JSON 只能有 `schema_version`、`batch_name`、`source`、`records`。
 7. 每条 record 只能有：`source_record_id`、`name`、`source`、`source_ref`、`formula_provenance`、`original_formula`、`economic_rationale`、`source_constraints`、`canonical_expression`。
 8. `source_record_id` 必须批内唯一并尽量全局唯一。
-9. AST 节点数 ≤ 64、深度 ≤ 12、lookback ≤ 2520 个交易日。
+9. AST 节点数 ≤ 64、深度 ≤ 12、lookback ≤ **250 个交易日**。该限制按完整 AST 的累计历史依赖计算；任何 rolling、delay、回归、月频函数或嵌套结构导致总 lookback > 250 的候选因子一律禁止生成、禁止交付。
 10. 与 `mother_bank/` 中任一参考因子或本批候选完全相同的 canonical AST 直接淘汰。
 11. 静态可证明排序等价的因子直接淘汰；乘 -1、再套 rank/zscore 或改名称不能算新因子。
 12. 同一批次不允许只改窗口或数字常数的 parameter-only 变体。
