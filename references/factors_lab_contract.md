@@ -94,7 +94,7 @@ vwap
 - `lag` 必须为非负整数。
 - 最大节点数 64。
 - 最大树深度 12。
-- 最大 lookback 2520 个交易日。
+- 最大 lookback **250 个交易日**。这是硬上限：必须按完整 AST 的累计历史依赖计算；任何嵌套 rolling / delay / regression / monthly function 等导致总 lookback > 250 的候选因子都禁止生成、禁止通过验证。
 - 禁止任何 future/forward/next/label/target 类字段。
 - JSON 中不要写注释。
 
