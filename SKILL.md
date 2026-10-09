@@ -21,7 +21,7 @@ Hard rules:
 6. Output must use exactly the direct import schema documented in `references/output_schema.md`.
 7. Reject exact/rank-equivalent duplicates against all local `mother_bank/` references and the current batch.
 8. Reject parameter-only variants and zero-mask conditionals.
-9. Respect AST limits: nodes <= 64, depth <= 12, lookback <= 2520.
+9. Respect AST limits: nodes <= 64, depth <= 12, lookback <= 250 trading days. This is a hard generation limit on the full accumulated AST dependency; never generate or hand off a candidate whose computed lookback exceeds 250.
 10. Validate before handoff.
 
 Validate:
