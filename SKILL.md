@@ -21,8 +21,11 @@ Hard rules:
 6. Output must use exactly the direct import schema documented in `references/output_schema.md`.
 7. Reject exact/rank-equivalent duplicates against all local `mother_bank/` references and the current batch.
 8. Reject parameter-only variants and zero-mask conditionals.
-9. Respect AST limits: nodes <= 64, depth <= 12, lookback <= 250 trading days. This is a hard generation limit on the full accumulated AST dependency; never generate or hand off a candidate whose computed lookback exceeds 250.
-10. Validate before handoff.
+9. Prefer one clear economic mechanism per factor. Anti-homogeneity must come from a genuinely different hypothesis, not from stacking more transforms or pre-combining several primitive factors; complex ensemble logic belongs in multi_factor.
+10. Respect hard complexity limits on every newly generated candidate: nodes <= 20, depth <= 8, distinct input features <= 4, total rolling/pair_rolling/function nodes <= 3, and no execution path may contain more than 2 nested rolling/pair_rolling/function nodes.
+11. Respect the hard lookback limit <= 250 trading days on the full accumulated AST dependency.
+12. Keep factor names concise (<= 40 characters). Names should identify the core mechanism and key input(s), not restate the whole AST.
+13. Validate before handoff.
 
 Validate:
 
