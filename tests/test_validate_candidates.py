@@ -133,6 +133,114 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["rejected_count"],1)
         self.assertIn("lookback too long", str(report["findings"]))
 
+    def test_excessive_statistical_nodes_rejected(self):
+        bank={"factors":[]}
+        x=B(
+            "add",
+            U("rank",R("mean",F("close"),5)),
+            B(
+                "add",
+                U("rank",R("std",F("volume"),5)),
+                B(
+                    "add",
+                    U("rank",R("mean",F("turnover"),5)),
+                    U("rank",R("std",F("amount"),5)),
+                ),
+            ),
+        )
+        payload={
+            "schema_version":1,
+            "batch_name":"complexity-heavy-test",
+            "source":"test",
+            "records":[{
+                "source_record_id":"TEST-COMPLEX-001",
+                "name":"too many statistical nodes",
+                "source":"test",
+                "source_ref":"unit test",
+                "formula_provenance":"unit test",
+                "original_formula":"four rolling states",
+                "economic_rationale":"verify statistical-node cap",
+                "source_constraints":"",
+                "canonical_expression":x,
+            }]
+        }
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(out["records"],[])
+        self.assertEqual(report["rejected_count"],1)
+        self.assertIn("too many rolling/pair_rolling/function nodes",str(report["findings"]))
+
+    def test_excessive_statistical_nesting_rejected(self):
+        bank={"factors":[]}
+        x=R("mean",R("std",R("mean",F("close"),5),5),5)
+        payload={
+            "schema_version":1,
+            "batch_name":"complexity-nesting-test",
+            "source":"test",
+            "records":[{
+                "source_record_id":"TEST-COMPLEX-002",
+                "name":"too much statistical nesting",
+                "source":"test",
+                "source_ref":"unit test",
+                "formula_provenance":"unit test",
+                "original_formula":"mean(std(mean(close)))",
+                "economic_rationale":"verify statistical nesting cap",
+                "source_constraints":"",
+                "canonical_expression":x,
+            }]
+        }
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(out["records"],[])
+        self.assertEqual(report["rejected_count"],1)
+        self.assertIn("statistical nesting is too deep",str(report["findings"]))
+
+    def test_too_many_distinct_features_rejected(self):
+        bank={"factors":[]}
+        xs=[U("rank",F(name)) for name in ("close","volume","turnover","amount","market_cap")]
+        x=B("add",xs[0],B("add",xs[1],B("add",xs[2],B("add",xs[3],xs[4]))))
+        payload={
+            "schema_version":1,
+            "batch_name":"complexity-feature-test",
+            "source":"test",
+            "records":[{
+                "source_record_id":"TEST-COMPLEX-003",
+                "name":"too many features",
+                "source":"test",
+                "source_ref":"unit test",
+                "formula_provenance":"unit test",
+                "original_formula":"five ranked inputs",
+                "economic_rationale":"verify feature-count cap",
+                "source_constraints":"",
+                "canonical_expression":x,
+            }]
+        }
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(out["records"],[])
+        self.assertEqual(report["rejected_count"],1)
+        self.assertIn("too many distinct input features",str(report["findings"]))
+
+    def test_long_factor_name_rejected(self):
+        bank={"factors":[]}
+        payload={
+            "schema_version":1,
+            "batch_name":"name-length-test",
+            "source":"test",
+            "records":[{
+                "source_record_id":"TEST-NAME-001",
+                "name":"x"*41,
+                "source":"test",
+                "source_ref":"unit test",
+                "formula_provenance":"unit test",
+                "original_formula":"close",
+                "economic_rationale":"verify concise-name cap",
+                "source_constraints":"",
+                "canonical_expression":F("close"),
+            }]
+        }
+        out,report=vc.validate_batch(payload,bank)
+        self.assertEqual(out["records"],[])
+        self.assertEqual(report["rejected_count"],1)
+        self.assertIn("name too long",str(report["findings"]))
+
     def test_future_like_feature_name_rejected(self):
         with self.assertRaises(vc.ValidationError):
             vc.canonicalize(F("next_close"),self.allowed)
