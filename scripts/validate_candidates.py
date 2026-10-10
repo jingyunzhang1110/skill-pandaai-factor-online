@@ -92,9 +92,14 @@ AST_KEYS = {
     "function": {"kind", "operator", "operands", "window", "parameter"},
 }
 
-MAX_NODES = 64
-MAX_DEPTH = 12
+MAX_NODES = 20
+MAX_DEPTH = 8
 MAX_LOOKBACK = 250
+MAX_DISTINCT_FEATURES = 4
+MAX_STATISTICAL_NODES = 3
+MAX_STATISTICAL_NESTING = 2
+MAX_NAME_LENGTH = 40
+STATISTICAL_KINDS = {"rolling", "pair_rolling", "function"}
 
 # Mirrors factors_lab FeatureDimensionCatalog.default() where the dimension is
 # known. Missing entries deliberately remain "unknown", matching factors_lab.
@@ -632,6 +637,41 @@ def expression_metrics(node: dict[str, Any]) -> dict[str, int]:
     return {"nodes": n, "depth": d, "operators": o, "lookback": l}
 
 
+def complexity_metrics(node: dict[str, Any]) -> dict[str, int]:
+    """Return mining-time complexity measures beyond generic AST size/depth."""
+    features: set[str] = set()
+
+    def rec(x: dict[str, Any], statistical_depth: int) -> tuple[int, int]:
+        kind = x["kind"]
+        if kind == "feature":
+            features.add(str(x["name"]))
+        is_statistical = kind in STATISTICAL_KINDS
+        next_depth = statistical_depth + (1 if is_statistical else 0)
+        statistical_nodes = 1 if is_statistical else 0
+        max_statistical_depth = next_depth
+        for value in x.values():
+            children: list[dict[str, Any]] = []
+            if isinstance(value, dict) and "kind" in value:
+                children = [value]
+            elif isinstance(value, list):
+                children = [
+                    item for item in value
+                    if isinstance(item, dict) and "kind" in item
+                ]
+            for child in children:
+                child_count, child_depth = rec(child, next_depth)
+                statistical_nodes += child_count
+                max_statistical_depth = max(max_statistical_depth, child_depth)
+        return statistical_nodes, max_statistical_depth
+
+    statistical_nodes, statistical_nesting = rec(node, 0)
+    return {
+        "distinct_features": len(features),
+        "statistical_nodes": statistical_nodes,
+        "statistical_nesting": statistical_nesting,
+    }
+
+
 def render_formula(node: dict[str, Any]) -> str:
     kind = node["kind"]
     if kind == "feature":
@@ -904,6 +944,10 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
             seen_source_ids.add(source_record_id)
             if not name:
                 raise ValidationError("name is required")
+            if len(name) > MAX_NAME_LENGTH:
+                raise ValidationError(
+                    f"name too long: {len(name)} > {MAX_NAME_LENGTH}"
+                )
             if not record_source:
                 raise ValidationError("source is required")
             if not original_formula:
@@ -924,6 +968,22 @@ def validate_batch(payload: dict[str, Any], bank: dict[str, Any]) -> tuple[dict[
             if metrics["lookback"] > MAX_LOOKBACK:
                 raise ValidationError(
                     f"AST lookback too long: {metrics['lookback']} > {MAX_LOOKBACK}"
+                )
+            complexity = complexity_metrics(expr)
+            if complexity["distinct_features"] > MAX_DISTINCT_FEATURES:
+                raise ValidationError(
+                    "AST uses too many distinct input features: "
+                    f"{complexity['distinct_features']} > {MAX_DISTINCT_FEATURES}"
+                )
+            if complexity["statistical_nodes"] > MAX_STATISTICAL_NODES:
+                raise ValidationError(
+                    "AST has too many rolling/pair_rolling/function nodes: "
+                    f"{complexity['statistical_nodes']} > {MAX_STATISTICAL_NODES}"
+                )
+            if complexity["statistical_nesting"] > MAX_STATISTICAL_NESTING:
+                raise ValidationError(
+                    "AST statistical nesting is too deep: "
+                    f"{complexity['statistical_nesting']} > {MAX_STATISTICAL_NESTING}"
                 )
             validate_dimension(expr)
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
