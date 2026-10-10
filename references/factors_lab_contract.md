@@ -92,9 +92,13 @@ vwap
 - 不允许附加未定义 key。
 - 常数必须是有限数字，不能是 NaN/Infinity。
 - `lag` 必须为非负整数。
-- 最大节点数 64。
-- 最大树深度 12。
+- 最大节点数 **20**。
+- 最大树深度 **8**。
+- 不同输入 feature 最多 **4 个**。
+- `rolling`、`pair_rolling`、`function` 三类时序/统计节点合计最多 **3 个**。
+- 任一根到叶路径上，`rolling`、`pair_rolling`、`function` 的嵌套深度最多 **2 层**。
 - 最大 lookback **250 个交易日**。这是硬上限：必须按完整 AST 的累计历史依赖计算；任何嵌套 rolling / delay / regression / monthly function 等导致总 lookback > 250 的候选因子都禁止生成、禁止通过验证。
+- 上述复杂度限制针对“新挖候选”。目的不是限制 factors_lab 的表达能力，而是防止因子挖掘阶段把本应由 multi_factor 完成的组合提前塞进单因子。
 - 禁止任何 future/forward/next/label/target 类字段。
 - JSON 中不要写注释。
 
