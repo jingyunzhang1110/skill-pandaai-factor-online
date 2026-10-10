@@ -43,7 +43,7 @@ Skill 的输入草稿和最终输出都使用 factors_lab `common_factor import-
 字段要求：
 
 - `source_record_id`：必填、批内唯一，并尽量全局唯一。
-- `name`：必填。
+- `name`：必填，且为避免冗长日志/报告与不可读命名，未来新挖候选长度不得超过 40 个字符；名称只概括核心机制与关键输入。
 - `source`：建议填写；缺省时可继承顶层 source，但 Skill 最终输出会补齐。
 - `source_ref`：来源定位。LLM 自研因子应写明批次/机制，不得伪造论文或研报页码。
 - `formula_provenance`：说明公式是原文抄录、原文形式化还是 LLM 新假设。
