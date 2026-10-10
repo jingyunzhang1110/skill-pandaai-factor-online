@@ -32,6 +32,10 @@ If downstream selection ranks stocks, `x`, `rank(x)`, `zscore(x)`, positive affi
 
 Value, liquidity, turnover and many fundamental ratios can be dominated by market cap or industry structure. Use `group_neutralize` only when the hypothesis calls for it and when the group field is point-in-time valid.
 
+## Complexity inflation
+
+Do not confuse formula complexity with novelty. Stacking several rolling statistics, correlations, regressions, ranks and conditionals can make a candidate look different while increasing compute cost, reducing shared-subexpression reuse and making economic interpretation weaker. In this Skill, anti-homogeneity should primarily come from a distinct economic mechanism. Complex signal combination belongs in multi_factor.
+
 ## Multiple testing
 
 A winner found after hundreds of trials is weaker evidence than the same result from ten pre-specified trials. Keep a complete campaign ledger, including rejected and failed candidates.
