@@ -1,0 +1,30 @@
+name: tmp-generate-151-20261011
+
+on:
+  push:
+    branches:
+      - tmp-generate-151-20261011
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate and validate 151 factors
+        run: python scripts/generate_151_20261011.py
+      - name: Show audit summary
+        run: python -c "import json; d=json.load(open('audit_20261011_151.json',encoding='utf-8')); print(json.dumps({k:d[k] for k in ['mother_bank_factor_count','proposal_count','prefiltered_noncolliding_count','clean_pool_count','selected_count','template_count','category_pair_count','max_lookback','max_nodes','max_depth']},ensure_ascii=False,indent=2)); print('final_validator=', json.dumps(d['final_validator_report'],ensure_ascii=False,indent=2))"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: factors_151_20261011
+          path: |
+            ready_for_factors_lab_20261011_151.json
+            audit_20261011_151.json
+            audit_pool_20261011_151.json
+          if-no-files-found: error
